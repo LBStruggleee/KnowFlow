@@ -1,0 +1,42 @@
+# Python
+.venv/
+backend/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+
+# Local secrets
+.env
+*.env
+backend/.env
+!backend/.env.example
+
+# Runtime data
+backend/data/*.db
+backend/data/*.db-*
+backend/storage/uploads/*
+backend/storage/chroma/*
+!backend/storage/uploads/.gitkeep
+!backend/storage/chroma/.gitkeep
+
+# Logs and temp files
+*.log
+.logs/
+backend/.logs/
+frontend/.logs/
+tmp/
+
+# IDE / OS
+.idea/
+.vscode/
+.obsidian/
+.DS_Store
+Thumbs.db
