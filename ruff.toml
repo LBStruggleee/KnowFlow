@@ -1,0 +1,7 @@
+target-version = "py313"
+line-length = 100
+exclude = [".venv", "backend/data", "backend/storage"]
+
+[lint]
+select = ["B", "E", "F", "I", "UP"]
+ignore = ["B008"]

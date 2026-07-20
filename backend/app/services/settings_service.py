@@ -1,7 +1,5 @@
-from sqlalchemy.orm import Session
-
 from app.models.system_setting import SystemSetting
-
+from sqlalchemy.orm import Session
 
 DEFAULT_SETTINGS: dict[str, tuple[str, str]] = {
     "top_k": ("5", "RAG 检索召回片段数"),

@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-
 from app.core.database import get_db
 from app.models.knowledge_base import KnowledgeBase
 from app.schemas.vector_search import VectorSearchRequest, VectorSearchResponse
 from app.services.vector_store_service import vector_store_service
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/kbs", tags=["vector search"])
 
