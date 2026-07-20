@@ -1,7 +1,3 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy import func
-from sqlalchemy.orm import Session
-
 from app.core.database import get_db
 from app.models.conversation import ChatMessage, Conversation
 from app.models.document import Document
@@ -14,6 +10,9 @@ from app.schemas.admin import (
     TokenUsageRead,
 )
 from app.services.settings_service import typed_settings, update_settings
+from fastapi import APIRouter, Depends
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 

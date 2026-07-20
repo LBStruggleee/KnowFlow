@@ -1,19 +1,21 @@
 import json
-
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+import logging
 
 from app.core.database import get_db
 from app.models.conversation import ChatMessage, Conversation
+from app.models.knowledge_base import KnowledgeBase
 from app.schemas.conversation import (
     ChatMessageRead,
     ConversationCreate,
     ConversationDetail,
     ConversationRead,
 )
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=ConversationRead, status_code=status.HTTP_201_CREATED)
@@ -21,6 +23,11 @@ def create_conversation(
     payload: ConversationCreate,
     db: Session = Depends(get_db),
 ) -> Conversation:
+    if db.get(KnowledgeBase, payload.kb_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Knowledge base not found.",
+        )
     conversation = Conversation(kb_id=payload.kb_id, title=payload.title)
     db.add(conversation)
     db.commit()
@@ -71,7 +78,7 @@ def get_conversation(
                 kb_id=message.kb_id,
                 role=message.role,
                 content=message.content,
-                sources=json.loads(message.sources_json or "[]"),
+                sources=_load_sources(message.sources_json),
                 prompt_tokens=message.prompt_tokens,
                 completion_tokens=message.completion_tokens,
                 total_tokens=message.total_tokens,
@@ -96,3 +103,12 @@ def delete_conversation(
     db.query(ChatMessage).filter(ChatMessage.conversation_id == conversation_id).delete()
     db.delete(conversation)
     db.commit()
+
+
+def _load_sources(value: str) -> list[dict[str, object]]:
+    try:
+        sources = json.loads(value or "[]")
+    except (TypeError, json.JSONDecodeError):
+        logger.warning("Ignoring malformed message sources JSON")
+        return []
+    return sources if isinstance(sources, list) else []

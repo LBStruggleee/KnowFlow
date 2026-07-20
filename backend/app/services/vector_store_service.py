@@ -1,13 +1,19 @@
+import logging
 from typing import Any
 
 import chromadb
-
 from app.core.database import BASE_DIR
 from app.models.document_chunk import DocumentChunk
 from app.services.embedding_service import embedding_service
 
 CHROMA_DIR = BASE_DIR / "storage" / "chroma"
-COLLECTION_NAME = "knowflow_chunks"
+COLLECTION_NAME = (
+    "knowflow_chunks"
+    if embedding_service.index_name == "hashing_v1"
+    else f"knowflow_chunks_{embedding_service.index_name}"
+)
+UPSERT_BATCH_SIZE = 100
+logger = logging.getLogger(__name__)
 
 
 class VectorStoreService:
@@ -18,6 +24,14 @@ class VectorStoreService:
             name=COLLECTION_NAME,
             metadata={"hnsw:space": "cosine"},
         )
+
+    @property
+    def collection_name(self) -> str:
+        return COLLECTION_NAME
+
+    @property
+    def embedding_provider(self) -> str:
+        return embedding_service.index_name
 
     def add_chunks(self, chunks: list[DocumentChunk]) -> None:
         if not chunks:
@@ -36,12 +50,15 @@ class VectorStoreService:
             for chunk in chunks
         ]
 
-        self.collection.upsert(
-            ids=ids,
-            embeddings=embeddings,
-            documents=documents,
-            metadatas=metadatas,
-        )
+        for start in range(0, len(ids), UPSERT_BATCH_SIZE):
+            end = start + UPSERT_BATCH_SIZE
+            self.collection.upsert(
+                ids=ids[start:end],
+                embeddings=embeddings[start:end],
+                documents=documents[start:end],
+                metadatas=metadatas[start:end],
+            )
+        logger.info("Indexed %s chunks in collection %s", len(chunks), COLLECTION_NAME)
 
     def delete_chunks(self, chunk_ids: list[int]) -> None:
         if not chunk_ids:
@@ -55,6 +72,8 @@ class VectorStoreService:
         self.collection.delete(where={"kb_id": kb_id})
 
     def search(self, kb_id: int, query: str, top_k: int = 5) -> list[dict[str, Any]]:
+        if self.collection.count() == 0:
+            return []
         query_embedding = embedding_service.embed_text(query)
         result = self.collection.query(
             query_embeddings=[query_embedding],
@@ -68,7 +87,7 @@ class VectorStoreService:
         distances = result.get("distances", [[]])[0]
 
         matches: list[dict[str, Any]] = []
-        for document, metadata, distance in zip(documents, metadatas, distances):
+        for document, metadata, distance in zip(documents, metadatas, distances, strict=False):
             matches.append(
                 {
                     "chunk_id": int(metadata["chunk_id"]),

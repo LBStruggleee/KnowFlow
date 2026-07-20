@@ -27,7 +27,7 @@ KnowFlow 当前 MVP 已经实现了完整 RAG 问答闭环：
 2. 上传课程资料
 3. 自动解析文档内容
 4. 将文本切分为 chunk
-5. 生成 embedding 并写入 Chroma
+5. 使用 DashScope `text-embedding-v3` 生成语义 embedding 并写入 Chroma
 6. 根据问题进行向量检索
 7. 调用阿里云百炼 / 通义千问生成回答
 8. 返回答案、引用源、检索过程和 token 使用情况
@@ -94,7 +94,8 @@ KnowFlow/
 │   │   ├── schemas/         # Pydantic schemas
 │   │   └── services/        # parser, chunker, vector store, RAG, LLM
 │   ├── storage/             # local runtime storage, ignored by git
-│   └── requirements.txt
+│   ├── requirements.txt     # runtime dependencies
+│   └── requirements-dev.txt # test, lint, and audit tools
 ├── frontend/                # Vue frontend
 │   ├── src/
 │   │   ├── api/             # API client
@@ -121,6 +122,8 @@ Edit `backend/.env`:
 
 ```env
 DASHSCOPE_API_KEY=your_dashscope_api_key
+EMBEDDING_PROVIDER=dashscope
+EMBEDDING_MODEL=text-embedding-v3
 QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 QWEN_MODEL=qwen-plus
 ```
@@ -151,6 +154,23 @@ Open:
 ```text
 http://127.0.0.1:5173/
 ```
+
+### 3. Quality checks
+
+```powershell
+pip install -r backend/requirements-dev.txt
+$env:PYTHONPATH = "backend"
+pytest backend/tests -q
+ruff check backend
+ruff format --check backend
+
+cd frontend
+npm test
+npm run build
+npm audit
+```
+
+GitHub Actions 会在每次 push 和 pull request 时执行同样的测试、构建、静态检查与依赖审计。
 
 ## Core API Examples
 
@@ -188,8 +208,9 @@ Content-Type: application/json
 
 ## Roadmap
 
-- Replace MVP hashing embedding with production embedding model
 - Add reranking for better retrieval quality
+- Add SSE streaming responses and background document jobs
+- Split the remaining management views into route-level Vue components
 - Add document-level permission and user accounts
 - Add batch import from web pages or course folders
 - Add evaluation set for retrieval and answer quality
@@ -207,6 +228,8 @@ Runtime files are intentionally ignored:
 - `node_modules`
 
 This keeps the repository clean and safe while preserving the full source code needed to rebuild the project.
+
+KnowFlow 当前默认是本地单用户应用，没有身份认证。请保持后端监听在 `127.0.0.1`；在增加认证、授权和限流前，不应直接暴露到公网。
 
 ## License
 
