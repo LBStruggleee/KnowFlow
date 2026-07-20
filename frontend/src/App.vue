@@ -1,7 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import MarkdownIt from 'markdown-it'
 import {
   ArrowRight,
   ChatDotRound,
@@ -31,12 +30,8 @@ import {
   updateKnowledgeBase,
   uploadDocument,
 } from './api/client'
-
-const markdown = new MarkdownIt({
-  html: false,
-  linkify: true,
-  breaks: true,
-})
+import ChatMessageStream from './components/ChatMessageStream.vue'
+import { countFinishedDocuments, sumChunkCounts } from './utils/documents'
 
 const activeView = ref('chat')
 const knowledgeBases = ref([])
@@ -79,16 +74,13 @@ const categoryForm = ref({
 })
 
 const question = ref('')
-const answer = ref('')
+const messages = ref([])
 const sources = ref([])
-const usage = ref(null)
 const retrievalTrace = ref(null)
 
 const selectedKb = computed(() =>
   knowledgeBases.value.find((item) => item.id === selectedKbId.value),
 )
-
-const renderedAnswer = computed(() => markdown.render(answer.value || ''))
 
 const normalizedQuery = computed(() => commandQuery.value.trim().toLowerCase())
 
@@ -120,13 +112,9 @@ const activeConversation = computed(() =>
   conversations.value.find((item) => item.id === activeConversationId.value),
 )
 
-const totalChunks = computed(() =>
-  documents.value.reduce((total, item) => total + (item.chunk_count || 0), chunks.value.length),
-)
+const totalChunks = computed(() => sumChunkCounts(documents.value))
 
-const finishedDocuments = computed(() =>
-  documents.value.filter((item) => item.status === 'finished').length,
-)
+const finishedDocuments = computed(() => countFinishedDocuments(documents.value))
 
 const recentDocuments = computed(() => filteredDocuments.value.slice(0, 4))
 
@@ -200,9 +188,8 @@ async function handleDeleteKb() {
     selectedDocumentId.value = null
     documents.value = []
     chunks.value = []
-    answer.value = ''
+    messages.value = []
     sources.value = []
-    usage.value = null
     await loadKnowledgeBases()
   } catch (error) {
     if (error !== 'cancel') {
@@ -256,9 +243,8 @@ async function handleKbChange() {
   selectedDocumentId.value = null
   activeConversationId.value = null
   chunks.value = []
-  answer.value = ''
+  messages.value = []
   sources.value = []
-  usage.value = null
   retrievalTrace.value = null
   syncMaintenanceForms()
   await loadDocuments()
@@ -299,16 +285,14 @@ async function loadConversation(conversationId) {
   try {
     const { data } = await getConversation(conversationId)
     activeConversationId.value = data.id
+    messages.value = data.messages
     const assistantMessages = data.messages.filter((message) => message.role === 'assistant')
     const lastAssistant = assistantMessages[assistantMessages.length - 1]
     if (lastAssistant) {
-      answer.value = lastAssistant.content
       sources.value = lastAssistant.sources || []
-      usage.value = {
-        prompt_tokens: lastAssistant.prompt_tokens,
-        completion_tokens: lastAssistant.completion_tokens,
-        total_tokens: lastAssistant.total_tokens,
-      }
+      retrievalTrace.value = null
+    } else {
+      sources.value = []
       retrievalTrace.value = null
     }
   } catch (error) {
@@ -322,9 +306,8 @@ async function handleDeleteConversation(conversation) {
     ElMessage.success('历史会话已删除')
     if (activeConversationId.value === conversation.id) {
       activeConversationId.value = null
-      answer.value = ''
+      messages.value = []
       sources.value = []
-      usage.value = null
       retrievalTrace.value = null
     }
     await loadConversations()
@@ -439,26 +422,32 @@ async function handleAsk() {
     return
   }
 
+  const submittedQuestion = question.value.trim()
   asking.value = true
-  answer.value = ''
+  messages.value.push({ role: 'user', content: submittedQuestion })
+  question.value = ''
   sources.value = []
-  usage.value = null
   retrievalTrace.value = null
   try {
     const { data } = await askQuestion({
       kb_id: selectedKbId.value,
-      question: question.value.trim(),
+      question: submittedQuestion,
       top_k: systemSettings.value.top_k,
       conversation_id: activeConversationId.value,
     })
-    answer.value = data.answer
+    messages.value.push({
+      role: 'assistant',
+      content: data.answer,
+      sources: data.sources || [],
+    })
     sources.value = data.sources || []
-    usage.value = data.usage
     retrievalTrace.value = data.retrieval_trace
     activeConversationId.value = data.conversation_id
     await loadConversations()
     await loadSystemStatus()
   } catch (error) {
+    messages.value.pop()
+    question.value = submittedQuestion
     showError(error, '问答请求失败')
   } finally {
     asking.value = false
@@ -468,9 +457,8 @@ async function handleAsk() {
 function startNewConversation() {
   activeConversationId.value = null
   question.value = ''
-  answer.value = ''
+  messages.value = []
   sources.value = []
-  usage.value = null
   retrievalTrace.value = null
 }
 
@@ -1119,14 +1107,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <section v-if="answer" class="answer">
-              <header>
-                <span class="ai-dot"></span>
-                <h3>AI 回答</h3>
-                <el-tag v-if="usage" effect="plain">Token {{ usage.total_tokens ?? '-' }}</el-tag>
-              </header>
-              <div class="answer-body markdown-body" v-html="renderedAnswer"></div>
-            </section>
+            <ChatMessageStream :messages="messages" />
 
             <el-collapse v-model="chatCollapse" class="dark-collapse compact-collapse">
               <el-collapse-item name="trace">
@@ -1139,7 +1120,8 @@ onBeforeUnmount(() => {
                 <el-empty v-if="!retrievalTrace" description="提问后显示检索过程" />
                 <div v-else class="trace-panel">
                   <div class="trace-summary">
-                    <span>Top K: {{ retrievalTrace.top_k }}</span>
+                    <span>请求 Top K: {{ retrievalTrace.requested_top_k }}</span>
+                    <span>返回: {{ retrievalTrace.returned_count }}</span>
                     <span>阈值: {{ retrievalTrace.score_threshold }}</span>
                     <span>最高分: {{ retrievalTrace.best_score.toFixed(3) }}</span>
                     <el-tag
