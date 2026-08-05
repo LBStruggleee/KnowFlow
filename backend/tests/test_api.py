@@ -7,6 +7,7 @@ from app.api import knowledge_bases as knowledge_bases_api
 from app.core.config import settings
 from app.models.conversation import ChatMessage, Conversation
 from app.models.document import Document
+from app.services import document_processing_service
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -106,26 +107,86 @@ def test_delete_knowledge_base_removes_conversations(
     assert db_session.scalars(select(ChatMessage)).all() == []
 
 
-def test_upload_streams_content_and_returns_real_chunk_count(
+def test_upload_returns_processing_then_background_task_finishes(
     client: TestClient,
+    db_session: Session,
     monkeypatch,
     tmp_path: Path,
 ) -> None:
     kb = _create_kb(client)
     monkeypatch.setattr(documents_api, "UPLOAD_DIR", tmp_path)
     monkeypatch.setattr(
-        documents_api.vector_store_service,
+        document_processing_service.vector_store_service,
         "add_chunks",
         lambda _chunks: None,
+    )
+    monkeypatch.setattr(
+        documents_api,
+        "process_document",
+        lambda document_id: document_processing_service.process_document_record(
+            db_session, document_id
+        ),
     )
 
     response = client.post(
         f"/api/kbs/{kb['id']}/documents/upload",
         files={"file": ("lesson.md", "第一段\n\n第二段", "text/markdown")},
     )
-    assert response.status_code == 201
-    assert response.json()["status"] == "finished"
-    assert response.json()["chunk_count"] == 1
+    assert response.status_code == 202
+    assert response.json()["status"] == "processing"
+    assert response.json()["chunk_count"] == 0
+
+    finished = client.get(f"/api/documents/{response.json()['id']}")
+    assert finished.status_code == 200
+    assert finished.json()["status"] == "finished"
+    assert finished.json()["chunk_count"] == 1
+
+
+def test_failed_document_can_be_retried(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    kb = _create_kb(client)
+    monkeypatch.setattr(documents_api, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(
+        document_processing_service.vector_store_service,
+        "add_chunks",
+        lambda _chunks: None,
+    )
+    monkeypatch.setattr(
+        document_processing_service.vector_store_service,
+        "delete_chunks",
+        lambda _chunk_ids: None,
+    )
+    monkeypatch.setattr(
+        documents_api,
+        "process_document",
+        lambda document_id: document_processing_service.process_document_record(
+            db_session, document_id
+        ),
+    )
+
+    upload = client.post(
+        f"/api/kbs/{kb['id']}/documents/upload",
+        files={"file": ("empty.md", "   ", "text/markdown")},
+    )
+    document_id = upload.json()["id"]
+    assert client.get(f"/api/documents/{document_id}").json()["status"] == "failed"
+
+    monkeypatch.setattr(
+        document_processing_service,
+        "parse_document_text",
+        lambda _path: "重试后成功解析的内容",
+    )
+    retry = client.post(f"/api/documents/{document_id}/retry")
+    assert retry.status_code == 202
+    assert retry.json()["status"] == "processing"
+
+    finished = client.get(f"/api/documents/{document_id}").json()
+    assert finished["status"] == "finished"
+    assert finished["chunk_count"] == 1
 
 
 def test_upload_limit_rejects_file_without_creating_document(

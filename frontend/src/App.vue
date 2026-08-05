@@ -26,12 +26,23 @@ import {
   listConversations,
   listDocuments,
   listKnowledgeBases,
+  retryDocument,
   updateSystemSettings,
   updateKnowledgeBase,
   uploadDocument,
 } from './api/client'
 import ChatMessageStream from './components/ChatMessageStream.vue'
-import { countFinishedDocuments, sumChunkCounts } from './utils/documents'
+import {
+  countFinishedDocuments,
+  hasProcessingDocuments,
+  sumChunkCounts,
+} from './utils/documents'
+
+const DOCUMENT_POLL_INTERVAL_MS = 1500
+const DOCUMENT_POLL_MAX_INTERVAL_MS = 10000
+let documentPollTimer = null
+let documentPollFailures = 0
+let documentLoadSequence = 0
 
 const activeView = ref('chat')
 const knowledgeBases = ref([])
@@ -240,6 +251,7 @@ async function handleUpdateKbCategory() {
 }
 
 async function handleKbChange() {
+  stopDocumentPolling()
   selectedDocumentId.value = null
   activeConversationId.value = null
   chunks.value = []
@@ -251,21 +263,69 @@ async function handleKbChange() {
   await loadConversations()
 }
 
-async function loadDocuments() {
+async function loadDocuments({ notifyOnError = true } = {}) {
+  const requestId = ++documentLoadSequence
+  const requestedKbId = selectedKbId.value
   if (!selectedKbId.value) {
     documents.value = []
+    loadingDocuments.value = false
+    stopDocumentPolling()
     return
   }
 
   loadingDocuments.value = true
   try {
-    const { data } = await listDocuments(selectedKbId.value)
+    const { data } = await listDocuments(requestedKbId)
+    if (requestId !== documentLoadSequence || requestedKbId !== selectedKbId.value) return
+    const previousDocuments = new Map(documents.value.map((document) => [document.id, document]))
     documents.value = data
+    documentPollFailures = 0
+    const selectedDocument = data.find((document) => document.id === selectedDocumentId.value)
+    if (
+      selectedDocument?.status === 'finished' &&
+      previousDocuments.get(selectedDocument.id)?.status === 'processing'
+    ) {
+      await loadChunks(selectedDocument.id)
+      ElMessage.success(`文档「${selectedDocument.title}」已完成入库`)
+    }
+    for (const document of data) {
+      if (
+        document.status === 'failed' &&
+        previousDocuments.get(document.id)?.status === 'processing'
+      ) {
+        ElMessage.error(`文档「${document.title}」处理失败，可在列表中重试`)
+      }
+    }
   } catch (error) {
-    showError(error, '文档加载失败')
+    if (requestId !== documentLoadSequence) return
+    documentPollFailures += 1
+    if (notifyOnError) showError(error, '文档加载失败')
   } finally {
-    loadingDocuments.value = false
+    if (requestId === documentLoadSequence) {
+      loadingDocuments.value = false
+      scheduleDocumentPolling()
+    }
   }
+}
+
+function stopDocumentPolling() {
+  if (documentPollTimer !== null) {
+    window.clearTimeout(documentPollTimer)
+    documentPollTimer = null
+  }
+}
+
+function scheduleDocumentPolling() {
+  stopDocumentPolling()
+  if (!hasProcessingDocuments(documents.value)) return
+  const retryDelay = Math.min(
+    DOCUMENT_POLL_INTERVAL_MS * 2 ** documentPollFailures,
+    DOCUMENT_POLL_MAX_INTERVAL_MS,
+  )
+  documentPollTimer = window.setTimeout(() => {
+    documentPollTimer = null
+    loadDocuments({ notifyOnError: false })
+  }, retryDelay)
 }
 
 async function loadConversations() {
@@ -357,14 +417,25 @@ async function handleUpload(uploadRequest) {
   uploading.value = true
   try {
     const { data } = await uploadDocument(selectedKbId.value, uploadRequest.file)
-    ElMessage.success('文档上传并入库成功')
+    ElMessage.success('文档已上传，正在后台解析并写入索引')
     selectedDocumentId.value = data.id
     await loadDocuments()
-    await loadChunks(data.id)
   } catch (error) {
     showError(error, '文档上传失败')
   } finally {
     uploading.value = false
+  }
+}
+
+async function handleRetryDocument(document) {
+  try {
+    await retryDocument(document.id)
+    selectedDocumentId.value = document.id
+    chunks.value = []
+    ElMessage.success(`已重新提交文档「${document.title}」`)
+    await loadDocuments()
+  } catch (error) {
+    showError(error, '重新处理文档失败')
   }
 }
 
@@ -400,6 +471,11 @@ async function loadChunks(documentId = selectedDocumentId.value) {
   }
 
   selectedDocumentId.value = documentId
+  const document = documents.value.find((item) => item.id === documentId)
+  if (document?.status !== 'finished') {
+    chunks.value = []
+    return
+  }
   try {
     const { data } = await listDocumentChunks(documentId)
     chunks.value = data
@@ -413,8 +489,8 @@ async function handleAsk() {
     ElMessage.warning('请先选择知识库')
     return
   }
-  if (!documents.value.length) {
-    ElMessage.warning('当前知识库还没有文档，请先上传资料或切换知识库')
+  if (!finishedDocuments.value) {
+    ElMessage.warning('当前知识库还没有已完成入库的文档，请等待处理完成或切换知识库')
     return
   }
   if (!question.value.trim()) {
@@ -495,6 +571,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopDocumentPolling()
   window.removeEventListener('keydown', handleGlobalKeydown)
 })
 </script>
@@ -756,13 +833,31 @@ onBeforeUnmount(() => {
                   <el-table-column prop="content_length" label="长度" width="110" />
                   <el-table-column prop="status" label="状态" width="120">
                     <template #default="{ row }">
-                      <el-tag :type="row.status === 'finished' ? 'success' : 'warning'" effect="dark">
+                      <el-tag
+                        :type="
+                          row.status === 'finished'
+                            ? 'success'
+                            : row.status === 'failed'
+                              ? 'danger'
+                              : 'warning'
+                        "
+                        effect="dark"
+                        :title="row.error_message || row.status"
+                      >
                         {{ row.status }}
                       </el-tag>
                     </template>
                   </el-table-column>
-                  <el-table-column label="操作" width="90" fixed="right">
+                  <el-table-column label="操作" width="150" fixed="right">
                     <template #default="{ row }">
+                      <el-button
+                        v-if="row.status === 'failed'"
+                        link
+                        :icon="Refresh"
+                        @click.stop="handleRetryDocument(row)"
+                      >
+                        重试
+                      </el-button>
                       <el-button
                         class="danger-text"
                         link

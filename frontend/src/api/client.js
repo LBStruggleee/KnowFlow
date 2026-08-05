@@ -29,6 +29,10 @@ export function deleteDocument(documentId) {
   return api.delete(`/api/documents/${documentId}`)
 }
 
+export function retryDocument(documentId) {
+  return api.post(`/api/documents/${documentId}/retry`)
+}
+
 export function uploadDocument(kbId, file) {
   const formData = new FormData()
   formData.append('file', file)
