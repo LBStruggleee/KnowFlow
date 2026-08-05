@@ -11,13 +11,12 @@ KnowFlow 是一个本地单用户的课程知识库问答应用，覆盖文档�
 - 使用 DashScope `text-embedding-v3` 进行语义 embedding；没有有效 API Key 时保留 deterministic hashing fallback，方便离线开发和测试。
 - 多轮会话会把最近历史送入 LLM，并使用历史中的最近用户问题辅助指代消解。
 - 每条回答返回引用片段、相似度分数、检索 trace 和 token 使用量。
-- 上传采用分块落盘和大小限制；解析、分块、embedding、Chroma 写入移出事件循环线程。
+- 上传采用分块落盘和大小限制，并立即返回 `processing`；解析、分块、embedding、Chroma 写入在进程内后台任务中完成，前端自动轮询最终状态，失败文档可以一键重试。
 - SQLite 是事实数据源，Chroma 是可重建索引；支持知识库级索引重建。
-- 后端 18 项 pytest、前端 2 项 Vitest、Ruff、Vite build 和依赖审计已接入 GitHub Actions。
+- 后端 19 项 pytest、前端 3 项 Vitest、Ruff、Vite build 和依赖审计已接入 GitHub Actions。
 
 远端仓库：[LBStruggleee/KnowFlow](https://github.com/LBStruggleee/KnowFlow)
-当前加固分支：[codex/comprehensive-hardening](https://github.com/LBStruggleee/KnowFlow/tree/codex/comprehensive-hardening)
-最新 PR：[feat: harden KnowFlow RAG pipeline and add CI](https://github.com/LBStruggleee/KnowFlow/pull/1)
+稳定版本以仓库 `main` 分支和对应 GitHub Actions 结果为准。
 
 ## 能做什么
 
@@ -26,7 +25,8 @@ KnowFlow 是一个本地单用户的课程知识库问答应用，覆盖文档�
 - 创建、重命名和分类管理多个知识库。
 - 上传 `.txt`、`.md`、`.pdf`、`.docx`、`.pptx` 文件。
 - 自动提取正文和表格文本，按段落感知规则切分 chunk。
-- 查看文档状态、内容预览、chunk 数和分块内容。
+- 查看可观测的 `processing → finished/failed` 状态、内容预览、chunk 数和分块内容。
+- 对解析或索引失败的文档重新提交后台处理，无需再次上传原文件。
 - 删除文档或知识库，并清理关联的会话、文件和向量。
 - 在索引异常或切换 embedding 模型后重建知识库索引。
 
@@ -52,7 +52,8 @@ flowchart LR
     User[学习者] --> Frontend[Vue 3 控制台]
     Frontend --> API[FastAPI API]
     API --> SQLite[(SQLite 事实数据)]
-    API --> Parser[文档解析器]
+    API --> Job[进程内后台任务]
+    Job --> Parser[文档解析器]
     Parser --> Chunker[文本分块器]
     Chunker --> Embed[Embedding Service]
     Embed --> Chroma[(Chroma 可重建索引)]
@@ -194,7 +195,7 @@ npm run build
 npm audit --audit-level=high
 ```
 
-GitHub Actions 会在 push 和 pull request 时执行同类检查。当前验证基线为后端 18 项、前端 2 项测试全部通过。
+GitHub Actions 会在 push 和 pull request 时执行同类检查。当前验证基线为后端 19 项、前端 3 项测试全部通过。
 
 ## 主要 API
 
@@ -202,9 +203,11 @@ GitHub Actions 会在 push 和 pull request 时执行同类检查。当前验证
 | --- | --- | --- |
 | `GET` | `/api/health` | 服务、embedding provider 和 collection 健康信息 |
 | `GET/POST/PATCH/DELETE` | `/api/kbs` | 知识库 CRUD |
-| `POST` | `/api/kbs/{kb_id}/documents/upload` | 上传并处理文档 |
+| `POST` | `/api/kbs/{kb_id}/documents/upload` | 上传文档，返回 `202 processing` 并提交后台处理 |
 | `GET` | `/api/kbs/{kb_id}/documents` | 查看知识库文档和 chunk 数 |
+| `GET` | `/api/documents/{document_id}` | 查询单个文档的最新处理状态 |
 | `GET` | `/api/documents/{document_id}/chunks` | 查看文档分块 |
+| `POST` | `/api/documents/{document_id}/retry` | 重新处理 `failed` 文档 |
 | `DELETE` | `/api/documents/{document_id}` | 删除文档及其索引 |
 | `POST` | `/api/kbs/{kb_id}/search` | 直接执行向量检索 |
 | `POST` | `/api/chat` | 执行带历史上下文的 RAG 问答 |
@@ -257,8 +260,9 @@ POST /api/kbs/{kb_id}/rebuild-index
 - 不要把后端或 Chroma 数据目录直接暴露到公网。
 - API Key 只放在 `backend/.env`，不要提交到 Git。
 - `UPLOAD_MAX_BYTES` 默认 50 MiB；解析器和上传处理仍应在受控环境运行。
+- 当前后台任务由 FastAPI 进程内执行，适合本地单实例；它没有跨进程持久队列、任务租约和分布式重试能力，进程被强制终止时应删除并重新上传停留在 `processing` 的文档。
 
-若要用于公网或多用户场景，必须先补充认证/授权、租户隔离、限流、后台任务队列、数据库迁移和审计日志。
+若要用于公网或多用户场景，必须先补充认证/授权、租户隔离、限流、持久任务队列、数据库迁移和审计日志。
 
 ## 文档与路线图
 
@@ -268,9 +272,9 @@ POST /api/kbs/{kb_id}/rebuild-index
 
 下一阶段：
 
-1. 后台任务队列和可观测的 `processing → finished/failed` 状态流。
-2. SSE 流式回答、请求取消和有限重试。
-3. 拆分剩余 `App.vue` 管理视图，按需加载 Element Plus，降低首屏 bundle。
+1. SSE 流式回答、请求取消和有限重试。
+2. 拆分剩余 `App.vue` 管理视图，按需加载 Element Plus，降低约 1.15 MB 的首屏 JS bundle。
+3. 用持久任务队列替换当前进程内后台任务，并增加任务租约、心跳、自动恢复和并发控制。
 4. Alembic 数据库迁移、用户认证授权和知识库权限。
 5. 建立 Recall@K、MRR、拒答准确率和同义改写稳定性的 RAG 评测集。
 6. Docker 部署和生产环境配置模板。
