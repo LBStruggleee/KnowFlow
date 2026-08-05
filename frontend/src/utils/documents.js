@@ -8,3 +8,7 @@ export function sumChunkCounts(documents) {
 export function countFinishedDocuments(documents) {
   return documents.filter((document) => document.status === 'finished').length
 }
+
+export function hasProcessingDocuments(documents) {
+  return documents.some((document) => document.status === 'processing')
+}

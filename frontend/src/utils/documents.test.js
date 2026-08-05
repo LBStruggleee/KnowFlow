@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { countFinishedDocuments, sumChunkCounts } from './documents'
+import { countFinishedDocuments, hasProcessingDocuments, sumChunkCounts } from './documents'
 
 describe('document statistics', () => {
   it('sums valid chunk counts without preview-state leakage', () => {
@@ -22,5 +22,10 @@ describe('document statistics', () => {
         { status: 'processing' },
       ]),
     ).toBe(1)
+  })
+
+  it('detects whether document status polling is needed', () => {
+    expect(hasProcessingDocuments([{ status: 'finished' }, { status: 'processing' }])).toBe(true)
+    expect(hasProcessingDocuments([{ status: 'finished' }, { status: 'failed' }])).toBe(false)
   })
 })

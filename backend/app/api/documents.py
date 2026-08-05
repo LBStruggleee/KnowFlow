@@ -9,11 +9,13 @@ from app.models.document_chunk import DocumentChunk
 from app.models.knowledge_base import KnowledgeBase
 from app.schemas.document import DocumentRead
 from app.schemas.document_chunk import DocumentChunkRead
-from app.services.document_parser import SUPPORTED_FILE_TYPES, parse_document_text
-from app.services.text_chunker import estimate_token_count, split_text
+from app.services.document_parser import SUPPORTED_FILE_TYPES
+from app.services.document_processing_service import (
+    process_document,
+    reset_document_for_retry,
+)
 from app.services.vector_store_service import vector_store_service
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.concurrency import run_in_threadpool
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -28,10 +30,11 @@ READ_CHUNK_SIZE = 1024 * 1024
 @router.post(
     "/api/kbs/{kb_id}/documents/upload",
     response_model=DocumentRead,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def upload_document(
     kb_id: int,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> DocumentRead:
@@ -93,49 +96,38 @@ async def upload_document(
         stored_path.unlink(missing_ok=True)
         raise
     db.refresh(document)
+    response = _document_read(db, document)
+    background_tasks.add_task(process_document, document.id)
+    return response
 
-    document_chunks: list[DocumentChunk] = []
-    try:
-        logger.info("Processing document id=%s name=%s", document.id, original_name)
-        parsed_text = await run_in_threadpool(parse_document_text, stored_path)
-        if not parsed_text.strip():
-            raise ValueError("No readable text was extracted from the document.")
-        chunks = await run_in_threadpool(split_text, parsed_text)
-        for chunk_index, chunk_content in enumerate(chunks):
-            document_chunk = DocumentChunk(
-                kb_id=kb_id,
-                document_id=document.id,
-                chunk_index=chunk_index,
-                content=chunk_content,
-                token_count=estimate_token_count(chunk_content),
-            )
-            db.add(document_chunk)
-            document_chunks.append(document_chunk)
 
-        db.flush()
-        await run_in_threadpool(vector_store_service.add_chunks, document_chunks)
+@router.post(
+    "/api/documents/{document_id}/retry",
+    response_model=DocumentRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def retry_document(
+    document_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> DocumentRead:
+    document = db.get(Document, document_id)
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found.",
+        )
+    if document.status != "failed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only failed documents can be retried.",
+        )
 
-        document.status = "finished"
-        document.content_length = len(parsed_text)
-        document.content_preview = parsed_text[:500]
-        document.error_message = ""
-        db.commit()
-    except Exception as exc:
-        logger.exception("Document processing failed id=%s name=%s", document.id, original_name)
-        db.rollback()
-        chunk_ids = [chunk.id for chunk in document_chunks if chunk.id is not None]
-        try:
-            await run_in_threadpool(vector_store_service.delete_chunks, chunk_ids)
-        except Exception:
-            logger.exception("Vector compensation failed for document id=%s", document.id)
-        db.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).delete()
-        document = db.get(Document, document.id)
-        document.status = "failed"
-        document.error_message = str(exc)[:1_000]
-        db.commit()
-
+    reset_document_for_retry(db, document)
     db.refresh(document)
-    return _document_read(db, document)
+    response = _document_read(db, document)
+    background_tasks.add_task(process_document, document.id)
+    return response
 
 
 @router.get("/api/kbs/{kb_id}/documents", response_model=list[DocumentRead])
