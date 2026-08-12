@@ -281,4 +281,6 @@ POST /api/kbs/{kb_id}/rebuild-index
 
 ## License
 
-当前项目用于课程实践和作品展示。
+KnowFlow 采用 [MIT License](LICENSE) 开源。参与贡献前请阅读
+[CONTRIBUTING.md](CONTRIBUTING.md)；安全问题请按照
+[SECURITY.md](SECURITY.md) 私下报告。
