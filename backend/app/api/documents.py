@@ -19,7 +19,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Up
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-router = APIRouter(tags=["documents"])
+router = APIRouter(prefix="/api", tags=["documents"])
 
 UPLOAD_DIR = BASE_DIR / "storage" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -28,7 +28,7 @@ READ_CHUNK_SIZE = 1024 * 1024
 
 
 @router.post(
-    "/api/kbs/{kb_id}/documents/upload",
+    "/kbs/{kb_id}/documents/upload",
     response_model=DocumentRead,
     status_code=status.HTTP_202_ACCEPTED,
 )
@@ -102,7 +102,7 @@ async def upload_document(
 
 
 @router.post(
-    "/api/documents/{document_id}/retry",
+    "/documents/{document_id}/retry",
     response_model=DocumentRead,
     status_code=status.HTTP_202_ACCEPTED,
 )
@@ -130,7 +130,7 @@ def retry_document(
     return response
 
 
-@router.get("/api/kbs/{kb_id}/documents", response_model=list[DocumentRead])
+@router.get("/kbs/{kb_id}/documents", response_model=list[DocumentRead])
 def list_documents(
     kb_id: int,
     db: Session = Depends(get_db),
@@ -154,7 +154,7 @@ def list_documents(
     ]
 
 
-@router.get("/api/documents/{document_id}", response_model=DocumentRead)
+@router.get("/documents/{document_id}", response_model=DocumentRead)
 def get_document(
     document_id: int,
     db: Session = Depends(get_db),
@@ -168,7 +168,7 @@ def get_document(
     return _document_read(db, document)
 
 
-@router.delete("/api/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(
     document_id: int,
     db: Session = Depends(get_db),
@@ -196,7 +196,7 @@ def delete_document(
 
 
 @router.get(
-    "/api/documents/{document_id}/chunks",
+    "/documents/{document_id}/chunks",
     response_model=list[DocumentChunkRead],
 )
 def list_document_chunks(
