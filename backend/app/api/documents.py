@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from app.core.config import settings
 from app.core.database import BASE_DIR, get_db
+from app.core.db_utils import safe_commit
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.knowledge_base import KnowledgeBase
@@ -66,7 +67,7 @@ async def upload_document(
                 bytes_written += len(content)
                 if bytes_written > settings.upload_max_bytes:
                     raise HTTPException(
-                        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                         detail=f"File exceeds the {settings.upload_max_bytes} byte upload limit.",
                     )
                 destination.write(content)
@@ -90,9 +91,8 @@ async def upload_document(
     )
     db.add(document)
     try:
-        db.commit()
+        safe_commit(db)
     except Exception:
-        db.rollback()
         stored_path.unlink(missing_ok=True)
         raise
     db.refresh(document)
@@ -186,7 +186,7 @@ def delete_document(
     db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
     file_path = Path(document.file_path)
     db.delete(document)
-    db.commit()
+    safe_commit(db)
 
     try:
         vector_store_service.delete_chunks(chunk_ids)

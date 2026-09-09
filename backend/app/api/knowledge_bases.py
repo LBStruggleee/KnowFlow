@@ -3,6 +3,7 @@ import shutil
 from pathlib import Path
 
 from app.core.database import BASE_DIR, get_db
+from app.core.db_utils import commit_or_conflict, safe_commit
 from app.models.conversation import ChatMessage, Conversation
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
@@ -16,7 +17,6 @@ from app.schemas.knowledge_base import (
 from app.services.vector_store_service import vector_store_service
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/kbs", tags=["knowledge bases"])
@@ -46,7 +46,7 @@ def create_knowledge_base(
         category=payload.category,
     )
     db.add(knowledge_base)
-    _commit_or_conflict(db)
+    commit_or_conflict(db)
     db.refresh(knowledge_base)
     return knowledge_base
 
@@ -86,7 +86,7 @@ def update_knowledge_base(
     if payload.category is not None:
         knowledge_base.category = payload.category
 
-    _commit_or_conflict(db)
+    commit_or_conflict(db)
     db.refresh(knowledge_base)
     return knowledge_base
 
@@ -105,7 +105,7 @@ def delete_knowledge_base(
     db.query(DocumentChunk).filter(DocumentChunk.kb_id == kb_id).delete()
     db.query(Document).filter(Document.kb_id == kb_id).delete()
     db.delete(knowledge_base)
-    db.commit()
+    safe_commit(db)
 
     try:
         vector_store_service.delete_knowledge_base(kb_id)
@@ -154,17 +154,6 @@ def _get_knowledge_base_or_404(db: Session, kb_id: int) -> KnowledgeBase:
             detail="Knowledge base not found.",
         )
     return knowledge_base
-
-
-def _commit_or_conflict(db: Session) -> None:
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Knowledge base name already exists.",
-        ) from exc
 
 
 def _safe_unlink(file_path: Path) -> None:

@@ -2,6 +2,7 @@ import json
 import logging
 
 from app.core.database import get_db
+from app.core.db_utils import safe_commit
 from app.models.conversation import ChatMessage, Conversation
 from app.models.knowledge_base import KnowledgeBase
 from app.schemas.conversation import (
@@ -30,7 +31,7 @@ def create_conversation(
         )
     conversation = Conversation(kb_id=payload.kb_id, title=payload.title)
     db.add(conversation)
-    db.commit()
+    safe_commit(db)
     db.refresh(conversation)
     return conversation
 
@@ -102,7 +103,7 @@ def delete_conversation(
         )
     db.query(ChatMessage).filter(ChatMessage.conversation_id == conversation_id).delete()
     db.delete(conversation)
-    db.commit()
+    safe_commit(db)
 
 
 def _load_sources(value: str) -> list[dict[str, object]]:

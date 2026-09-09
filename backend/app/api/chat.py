@@ -2,6 +2,7 @@ import json
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.db_utils import safe_commit
 from app.models.conversation import ChatMessage, Conversation
 from app.models.knowledge_base import KnowledgeBase
 from app.schemas.chat import ChatRequest, ChatResponse
@@ -65,11 +66,7 @@ def chat(
     )
     conversation.updated_at = func.now()
     db.add_all([user_message, assistant_message])
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
+    safe_commit(db)
 
     result["conversation_id"] = conversation.id
     return ChatResponse(**result)
