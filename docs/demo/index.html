@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KnowFlow 知汇 - 重构演示</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <div id="app" class="app-shell">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-mark">KF</div>
+                <div class="brand-text">
+                    <h1>KnowFlow</h1>
+                    <p>知汇 · RAG Console</p>
+                </div>
+            </div>
+
+            <nav class="nav">
+                <a href="#" class="nav-item active" data-view="chat">
+                    <span class="nav-icon">💬</span>
+                    <span>RAG 问答</span>
+                </a>
+                <a href="#" class="nav-item" data-view="kb">
+                    <span class="nav-icon">📚</span>
+                    <span>知识库管理</span>
+                </a>
+                <a href="#" class="nav-item" data-view="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span>系统设置</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-panel">
+                <span class="panel-label">当前知识库</span>
+                <strong id="currentKbName">大数据课程</strong>
+                <p id="currentKbCategory">分类: 大数据</p>
+            </div>
+
+            <section class="sidebar-metrics">
+                <div class="metric-card">
+                    <span>知识库</span>
+                    <strong id="kbCount">3</strong>
+                    <em>workspaces</em>
+                </div>
+                <div class="metric-card">
+                    <span>文档</span>
+                    <strong id="docCount">24</strong>
+                    <em>documents</em>
+                </div>
+                <div class="metric-card">
+                    <span>分块</span>
+                    <strong id="chunkCount">312</strong>
+                    <em>chunks</em>
+                </div>
+            </section>
+
+            <section class="sidebar-history">
+                <button class="history-toggle" id="historyToggle">
+                    <span class="panel-label">History</span>
+                    <strong>历史会话</strong>
+                    <em id="historyCount">5 sessions</em>
+                </button>
+                <div class="history-list" id="historyList">
+                    <button class="history-item active">
+                        <span>
+                            <strong>Spark RDD 特点讨论</strong>
+                            <em>#1</em>
+                        </span>
+                    </button>
+                    <button class="history-item">
+                        <span>
+                            <strong>HDFS 存储原理</strong>
+                            <em>#2</em>
+                        </span>
+                    </button>
+                    <button class="history-item">
+                        <span>
+                            <strong>MapReduce 工作流程</strong>
+                            <em>#3</em>
+                        </span>
+                    </button>
+                </div>
+            </section>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 顶部栏 -->
+            <header class="topbar">
+                <div class="command-search">
+                    <span class="search-icon">🔍</span>
+                    <input type="search" id="commandSearch" placeholder="搜索知识库、文档或问题...">
+                    <kbd>⌘K</kbd>
+                </div>
+                <nav class="topbar-nav">
+                    <button class="nav-btn active" data-view="chat">RAG 问答</button>
+                    <button class="nav-btn" data-view="kb">知识库管理</button>
+                    <button class="nav-btn" data-view="settings">Settings</button>
+                </nav>
+                <div class="topbar-actions">
+                    <button class="icon-btn" title="刷新">🔄</button>
+                    <button class="primary-btn" id="systemBtn">System</button>
+                </div>
+            </header>
+
+            <!-- 视图容器 -->
+            <div class="view-container">
+                <!-- 聊天视图 -->
+                <section class="view chat-view active" id="chatView">
+                    <div class="chat-header">
+                        <div class="chat-header-info">
+                            <span class="eyebrow">Ask KnowFlow</span>
+                            <h3>向知识库提问</h3>
+                            <p>回答会严格基于选定知识库的检索片段生成，引用源可在下方展开查看。</p>
+                        </div>
+                        <div class="active-database">
+                            <span>当前数据库</span>
+                            <strong>大数据课程</strong>
+                            <em>24 docs · 312 chunks</em>
+                        </div>
+                    </div>
+
+                    <!-- 消息流 -->
+                    <div class="message-stream" id="messageStream">
+                        <div class="welcome-message">
+                            <h2>👋 欢迎来到 KnowFlow</h2>
+                            <p>我可以帮你基于课程资料回答问题。试试问我：</p>
+                            <div class="suggested-questions">
+                                <button class="suggestion-btn">什么是 Spark RDD？</button>
+                                <button class="suggestion-btn">HDFS 的存储原理是什么？</button>
+                                <button class="suggestion-btn">MapReduce 和 Spark 有什么区别？</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 输入区 -->
+                    <div class="input-area">
+                        <div class="input-shell">
+                            <textarea 
+                                id="questionInput" 
+                                placeholder="输入你的问题... (Enter 发送, Shift+Enter 换行)"
+                                rows="3"
+                            ></textarea>
+                            <div class="input-toolbar">
+                                <div class="input-tools">
+                                    <select id="kbSelect" class="kb-select">
+                                        <option value="1">大数据课程</option>
+                                        <option value="2">机器学习</option>
+                                        <option value="3">深度学习</option>
+                                    </select>
+                                    <span class="divider"></span>
+                                    <span class="input-hint">Top K: 5 · 阈值: 0.0</span>
+                                </div>
+                                <button class="send-btn" id="sendBtn" title="发送">
+                                    <span>➤</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 检索过程面板 -->
+                    <div class="trace-panel" id="tracePanel" style="display: none;">
+                        <div class="trace-header">
+                            <span class="collapse-title">检索过程</span>
+                            <span class="score-tag" id="bestScoreTag">-</span>
+                        </div>
+                        <div class="trace-summary" id="traceSummary"></div>
+                        <div class="trace-matches" id="traceMatches"></div>
+                    </div>
+                </section>
+
+                <!-- 知识库管理视图 -->
+                <section class="view kb-view" id="kbView">
+                    <div class="kb-layout">
+                        <!-- 左侧列表 -->
+                        <div class="kb-sidebar">
+                            <div class="kb-sidebar-header">
+                                <h4>知识库列表</h4>
+                                <button class="primary-btn small" id="createKbBtn">+ 新建</button>
+                            </div>
+                            <div class="kb-list" id="kbList">
+                                <div class="kb-item active">
+                                    <div class="kb-item-info">
+                                        <strong>大数据课程</strong>
+                                        <span>Spark, Hadoop, Flink</span>
+                                    </div>
+                                    <span class="kb-item-count">24 文档</span>
+                                </div>
+                                <div class="kb-item">
+                                    <div class="kb-item-info">
+                                        <strong>机器学习</strong>
+                                        <span>SVM, 决策树, 聚类</span>
+                                    </div>
+                                    <span class="kb-item-count">18 文档</span>
+                                </div>
+                                <div class="kb-item">
+                                    <div class="kb-item-info">
+                                        <strong>深度学习</strong>
+                                        <span>CNN, RNN, Transformer</span>
+                                    </div>
+                                    <span class="kb-item-count">12 文档</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 右侧内容 -->
+                        <div class="kb-main">
+                            <!-- 文档上传区 -->
+                            <div class="upload-area" id="uploadArea">
+                                <div class="upload-icon">📄</div>
+                                <h4>拖拽文件到此处上传</h4>
+                                <p>支持 .txt, .md, .pdf, .docx, .pptx</p>
+                                <button class="primary-btn" id="uploadBtn">选择文件</button>
+                            </div>
+
+                            <!-- 文档列表 -->
+                            <div class="doc-section">
+                                <div class="section-header">
+                                    <h4>文档列表</h4>
+                                    <span class="doc-count">24 个文档</span>
+                                </div>
+                                <div class="doc-list" id="docList">
+                                    <div class="doc-item">
+                                        <div class="doc-icon">📄</div>
+                                        <div class="doc-info">
+                                            <strong>Spark编程指南.pdf</strong>
+                                            <span>PDF · 3 分钟前</span>
+                                        </div>
+                                        <div class="doc-status finished">已完成</div>
+                                        <div class="doc-chunks">48 chunks</div>
+                                        <button class="icon-btn small">🗑️</button>
+                                    </div>
+                                    <div class="doc-item">
+                                        <div class="doc-icon">📝</div>
+                                        <div class="doc-info">
+                                            <strong>HDFS架构详解.md</strong>
+                                            <span>Markdown · 1 小时前</span>
+                                        </div>
+                                        <div class="doc-status finished">已完成</div>
+                                        <div class="doc-chunks">36 chunks</div>
+                                        <button class="icon-btn small">🗑️</button>
+                                    </div>
+                                    <div class="doc-item">
+                                        <div class="doc-icon">📊</div>
+                                        <div class="doc-info">
+                                            <strong>大数据技术栈.pptx</strong>
+                                            <span>PPTX · 处理中...</span>
+                                        </div>
+                                        <div class="doc-status processing">
+                                            <span class="spinner"></span>
+                                            处理中
+                                        </div>
+                                        <div class="doc-chunks">-</div>
+                                        <button class="icon-btn small">🗑️</button>
+                                    </div>
+                                    <div class="doc-item">
+                                        <div class="doc-icon">📄</div>
+                                        <div class="doc-info">
+                                            <strong>Flink流式计算.docx</strong>
+                                            <span>DOCX · 失败</span>
+                                        </div>
+                                        <div class="doc-status failed">失败</div>
+                                        <div class="doc-chunks">-</div>
+                                        <button class="icon-btn small">🔄</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 分块预览 -->
+                            <div class="chunk-section" id="chunkSection" style="display: none;">
+                                <div class="section-header">
+                                    <h4>文档分块预览</h4>
+                                    <button class="icon-btn small" id="closeChunkBtn">✕</button>
+                                </div>
+                                <div class="chunk-list" id="chunkList">
+                                    <div class="chunk-item">
+                                        <div class="chunk-header">
+                                            <span>Chunk #1</span>
+                                            <span>Token: 156</span>
+                                        </div>
+                                        <p>Apache Spark 是一个快速、通用的集群计算系统...</p>
+                                    </div>
+                                    <div class="chunk-item">
+                                        <div class="chunk-header">
+                                            <span>Chunk #2</span>
+                                            <span>Token: 142</span>
+                                        </div>
+                                        <p>RDD（Resilient Distributed Dataset）是 Spark 的核心数据抽象...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 设置视图 -->
+                <section class="view settings-view" id="settingsView">
+                    <div class="settings-layout">
+                        <div class="settings-content">
+                            <h3>系统设置</h3>
+                            <p class="settings-desc">配置检索和生成参数</p>
+
+                            <div class="settings-grid">
+                                <div class="setting-card">
+                                    <span class="eyebrow">检索</span>
+                                    <h4>检索参数</h4>
+                                    <div class="setting-item">
+                                        <label>Top K</label>
+                                        <input type="range" id="topKSlider" min="1" max="20" value="5">
+                                        <span class="setting-value" id="topKValue">5</span>
+                                    </div>
+                                    <div class="setting-item">
+                                        <label>分数阈值</label>
+                                        <input type="range" id="thresholdSlider" min="0" max="100" value="0">
+                                        <span class="setting-value" id="thresholdValue">0.00</span>
+                                    </div>
+                                </div>
+
+                                <div class="setting-card">
+                                    <span class="eyebrow">生成</span>
+                                    <h4>模型参数</h4>
+                                    <div class="setting-item">
+                                        <label>模型</label>
+                                        <select id="modelSelect">
+                                            <option value="qwen-plus">qwen-plus</option>
+                                            <option value="qwen-max">qwen-max</option>
+                                            <option value="qwen-turbo">qwen-turbo</option>
+                                        </select>
+                                    </div>
+                                    <div class="setting-item">
+                                        <label>温度</label>
+                                        <input type="range" id="tempSlider" min="0" max="20" value="2">
+                                        <span class="setting-value" id="tempValue">0.20</span>
+                                    </div>
+                                </div>
+
+                                <div class="setting-card">
+                                    <span class="eyebrow">历史</span>
+                                    <h4>会话历史</h4>
+                                    <div class="setting-item">
+                                        <label>最大消息数</label>
+                                        <input type="number" id="maxMessages" value="20" min="1" max="100">
+                                    </div>
+                                    <div class="setting-item">
+                                        <label>最大字符数</label>
+                                        <input type="number" id="maxChars" value="16000" min="1000" max="50000">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="primary-btn large" id="saveSettingsBtn">保存设置</button>
+                        </div>
+
+                        <!-- 系统状态 -->
+                        <div class="system-status">
+                            <span class="eyebrow">System Status</span>
+                            <h4>系统概览</h4>
+                            <div class="status-grid">
+                                <div class="status-item">
+                                    <span>知识库</span>
+                                    <strong>3</strong>
+                                </div>
+                                <div class="status-item">
+                                    <span>文档</span>
+                                    <strong>54</strong>
+                                </div>
+                                <div class="status-item">
+                                    <span>分块</span>
+                                    <strong>892</strong>
+                                </div>
+                                <div class="status-item">
+                                    <span>会话</span>
+                                    <strong>12</strong>
+                                </div>
+                                <div class="status-item">
+                                    <span>消息</span>
+                                    <strong>156</strong>
+                                </div>
+                                <div class="status-item">
+                                    <span>Token 用量</span>
+                                    <strong>45.2K</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast 通知 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="./js/mock-data.js"></script>
+    <script src="./js/app.js"></script>
+</body>
+</html>
