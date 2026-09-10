@@ -7,12 +7,16 @@ const MockData = {
     ],
 
     documents: [
-        { id: 1, title: 'Spark编程指南.pdf', type: 'PDF', status: 'finished', time: '3 分钟前', chunks: 48 },
-        { id: 2, title: 'HDFS架构详解.md', type: 'Markdown', status: 'finished', time: '1 小时前', chunks: 36 },
-        { id: 3, title: '大数据技术栈.pptx', type: 'PPTX', status: 'processing', time: '处理中...', chunks: null },
-        { id: 4, title: 'Flink流式计算.docx', type: 'DOCX', status: 'failed', time: '失败', chunks: null },
-        { id: 5, title: 'Hadoop实战手册.pdf', type: 'PDF', status: 'finished', time: '2 天前', chunks: 62 },
-        { id: 6, title: 'Kafka消息队列.md', type: 'Markdown', status: 'finished', time: '3 天前', chunks: 28 },
+        { id: 1, kbId: 1, title: 'Spark编程指南.pdf', type: 'PDF', status: 'finished', time: '3 分钟前', chunks: 48 },
+        { id: 2, kbId: 1, title: 'HDFS架构详解.md', type: 'Markdown', status: 'finished', time: '1 小时前', chunks: 36 },
+        { id: 3, kbId: 1, title: '大数据技术栈.pptx', type: 'PPTX', status: 'processing', time: '处理中...', chunks: null },
+        { id: 4, kbId: 1, title: 'Flink流式计算.docx', type: 'DOCX', status: 'failed', time: '失败', chunks: null },
+        { id: 5, kbId: 1, title: 'Hadoop实战手册.pdf', type: 'PDF', status: 'finished', time: '2 天前', chunks: 62 },
+        { id: 6, kbId: 1, title: 'Kafka消息队列.md', type: 'Markdown', status: 'finished', time: '3 天前', chunks: 28 },
+        { id: 7, kbId: 2, title: 'SVM算法详解.pdf', type: 'PDF', status: 'finished', time: '1 周前', chunks: 45 },
+        { id: 8, kbId: 2, title: '决策树与随机森林.md', type: 'Markdown', status: 'finished', time: '1 周前', chunks: 38 },
+        { id: 9, kbId: 3, title: 'CNN卷积神经网络.pdf', type: 'PDF', status: 'finished', time: '2 周前', chunks: 52 },
+        { id: 10, kbId: 3, title: 'Transformer架构详解.md', type: 'Markdown', status: 'finished', time: '2 周前', chunks: 41 },
     ],
 
     conversations: [
@@ -267,5 +271,20 @@ const MockAPI = {
     async rebuildIndex(kbId) {
         await simulateDelay(2000);
         return { success: true, indexedChunks: 312 };
+    },
+
+    async createKnowledgeBase(data) {
+        await simulateDelay(800);
+        return { 
+            success: true, 
+            kb: { 
+                id: Date.now(), 
+                name: data.name, 
+                category: data.category, 
+                description: data.description,
+                docCount: 0, 
+                chunkCount: 0 
+            } 
+        };
     }
 };
