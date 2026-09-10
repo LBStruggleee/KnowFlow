@@ -40,3 +40,11 @@ tmp/
 .obsidian/
 .DS_Store
 Thumbs.db
+
+# Research / scraped data files (not part of the project)
+bing*.txt
+juejin_*.txt
+nowcoder_*.txt
+zhihu_*.txt
+kanzhun.txt
+s[0-9]*.txt
