@@ -6,7 +6,9 @@ import {
   Collection,
   Document,
   EditPen,
+  Expand,
   Files,
+  Fold,
   FolderOpened,
   Lock,
   MagicStick,
@@ -20,6 +22,7 @@ import {
   Tickets,
 } from '@element-plus/icons-vue'
 import { courses, navItems as navDefinitions, sources, taskModes } from './mockData'
+import { getEvidencePanelState } from './evidencePanelState'
 import KnowledgeView from './views/KnowledgeView.vue'
 import RecordsView from './views/RecordsView.vue'
 import SettingsView from './views/SettingsView.vue'
@@ -42,6 +45,7 @@ const selectedCourse = computed(() =>
   courses.find((course) => course.id === selectedCourseId.value),
 )
 const activeNavItem = computed(() => navItems.find((item) => item.id === activeView.value))
+const evidencePanelState = computed(() => getEvidencePanelState(sourcePanelOpen.value, sources.length))
 
 function selectView(view) {
   activeView.value = view
@@ -157,7 +161,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncViewFromHash)
         </div>
       </header>
 
-      <div v-if="activeView === 'assistant'" class="assistant-layout">
+      <div v-if="activeView === 'assistant'" :class="['assistant-layout', { 'evidence-collapsed': !sourcePanelOpen }]">
         <section class="conversation-pane">
           <header class="conversation-header">
             <div>
@@ -243,14 +247,14 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncViewFromHash)
           </div>
         </section>
 
-        <aside :class="['evidence-panel', 'glass-surface', { collapsed: !sourcePanelOpen }]">
-          <header class="evidence-header">
+        <aside :class="['evidence-panel', 'glass-surface', evidencePanelState.stateClass]" :aria-label="evidencePanelState.toggleLabel">
+          <header v-if="sourcePanelOpen" class="evidence-header">
             <div>
               <span class="eyebrow">Evidence</span>
               <h2>回答依据</h2>
             </div>
-            <button class="icon-button glass-control" type="button" aria-label="收起引用" @click="sourcePanelOpen = !sourcePanelOpen">
-              <el-icon><Files /></el-icon>
+            <button class="icon-button glass-control" type="button" :aria-label="evidencePanelState.toggleLabel" :title="evidencePanelState.toggleLabel" :aria-expanded="sourcePanelOpen" @click="sourcePanelOpen = false">
+              <el-icon><Fold /></el-icon>
             </button>
           </header>
 
@@ -284,6 +288,13 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncViewFromHash)
               <span>在原文中定位</span>
             </button>
           </template>
+
+          <button v-else class="evidence-capsule-trigger" type="button" :aria-label="evidencePanelState.toggleLabel" :title="evidencePanelState.toggleLabel" :aria-expanded="sourcePanelOpen" @click="sourcePanelOpen = true">
+            <span class="evidence-capsule-icon"><el-icon><Files /></el-icon></span>
+            <span class="evidence-capsule-desktop"><strong>依据</strong><em>{{ sources.length }}</em></span>
+            <span class="evidence-capsule-mobile"><strong>回答依据</strong><em>{{ evidencePanelState.sourceSummary }}</em></span>
+            <el-icon class="evidence-capsule-arrow"><Expand /></el-icon>
+          </button>
         </aside>
       </div>
 
