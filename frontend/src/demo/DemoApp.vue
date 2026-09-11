@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   ArrowUp,
   Bell,
@@ -20,13 +20,19 @@ import {
   Tickets,
 } from '@element-plus/icons-vue'
 import { courses, navItems as navDefinitions, sources, taskModes } from './mockData'
+import KnowledgeView from './views/KnowledgeView.vue'
+import RecordsView from './views/RecordsView.vue'
+import SettingsView from './views/SettingsView.vue'
 
 const navIcons = { assistant: Reading, knowledge: FolderOpened, records: Notebook, settings: Setting }
 const navItems = navDefinitions.map((item) => ({ ...item, icon: navIcons[item.id] }))
 
-const activeView = ref('assistant')
+const validViews = new Set(navDefinitions.map((item) => item.id))
+const initialView = window.location.hash.slice(1)
+const activeView = ref(validViews.has(initialView) ? initialView : 'assistant')
 const activeMode = ref('自由提问')
 const selectedCourseId = ref(1)
+const glassVariant = ref('balanced')
 const question = ref('')
 const sourcePanelOpen = ref(true)
 const mobileNavOpen = ref(false)
@@ -35,19 +41,29 @@ const selectedSourceId = ref(1)
 const selectedCourse = computed(() =>
   courses.find((course) => course.id === selectedCourseId.value),
 )
+const activeNavItem = computed(() => navItems.find((item) => item.id === activeView.value))
 
 function selectView(view) {
   activeView.value = view
   mobileNavOpen.value = false
+  window.history.replaceState(null, '', `#${view}`)
 }
 
 function useSuggestion(text) {
   question.value = text
 }
+
+function syncViewFromHash() {
+  const view = window.location.hash.slice(1)
+  if (validViews.has(view)) activeView.value = view
+}
+
+onMounted(() => window.addEventListener('hashchange', syncViewFromHash))
+onBeforeUnmount(() => window.removeEventListener('hashchange', syncViewFromHash))
 </script>
 
 <template>
-  <main class="demo-canvas">
+  <main :class="['demo-canvas', `glass-${glassVariant}`]">
     <div class="ambient-grid" aria-hidden="true">
       <span class="ambient-block block-green"></span>
       <span class="ambient-block block-blue"></span>
@@ -63,6 +79,8 @@ function useSuggestion(text) {
         <el-icon><Bell /></el-icon>
       </button>
     </header>
+
+    <button v-if="mobileNavOpen" class="mobile-scrim" type="button" aria-label="关闭导航" @click="mobileNavOpen = false"></button>
 
     <aside :class="['sidebar', 'glass-surface', { 'is-open': mobileNavOpen }]">
       <div class="brand-lockup">
@@ -122,7 +140,7 @@ function useSuggestion(text) {
         <div class="breadcrumb">
           <span>{{ selectedCourse.name }}</span>
           <span class="slash">/</span>
-          <strong>学习助手</strong>
+          <strong>{{ activeNavItem?.label }}</strong>
         </div>
         <div class="toolbar-actions">
           <button class="search-trigger glass-control" type="button">
@@ -269,13 +287,9 @@ function useSuggestion(text) {
         </aside>
       </div>
 
-      <section v-else class="placeholder-view">
-        <div class="placeholder-icon"><el-icon><component :is="navItems.find((item) => item.id === activeView)?.icon" /></el-icon></div>
-        <span class="eyebrow">V0 结构预览</span>
-        <h1>{{ navItems.find((item) => item.id === activeView)?.label }}</h1>
-        <p>该区域会在下一版补充完整模拟数据与操作流程。</p>
-        <button class="new-chat-button glass-control" type="button" @click="selectView('assistant')">返回学习助手</button>
-      </section>
+      <KnowledgeView v-else-if="activeView === 'knowledge'" :course="selectedCourse" />
+      <RecordsView v-else-if="activeView === 'records'" @open-assistant="selectView('assistant')" />
+      <SettingsView v-else :glass-variant="glassVariant" @update:glass-variant="glassVariant = $event" />
     </section>
   </main>
 </template>
