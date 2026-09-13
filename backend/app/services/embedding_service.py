@@ -2,6 +2,7 @@ import hashlib
 import logging
 import math
 import re
+from typing import Protocol
 
 from app.core.config import settings
 from fastapi import HTTPException, status
@@ -9,6 +10,15 @@ from openai import APIConnectionError, APIStatusError, OpenAI
 
 EMBEDDING_DIMENSION = 384
 logger = logging.getLogger(__name__)
+
+
+class EmbeddingProvider(Protocol):
+    def embed_text(self, text: str) -> list[float]: ...
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]: ...
+
+    @property
+    def index_name(self) -> str: ...
 
 
 class HashingEmbeddingService:
@@ -81,6 +91,39 @@ class DashScopeEmbeddingService:
         return f"dashscope_{model_slug}"
 
 
+class ResilientEmbeddingService:
+    """Use the configured provider until it fails, then stay on local embeddings."""
+
+    def __init__(
+        self,
+        primary: EmbeddingProvider,
+        fallback: EmbeddingProvider | None = None,
+    ) -> None:
+        self.primary = primary
+        self.fallback = fallback or HashingEmbeddingService()
+        self.active: EmbeddingProvider = primary
+
+    def use_fallback(self) -> None:
+        self.active = self.fallback
+
+    def embed_text(self, text: str) -> list[float]:
+        return self.embed_texts([text])[0]
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        try:
+            return self.active.embed_texts(texts)
+        except HTTPException:
+            if self.active is self.fallback:
+                raise
+            logger.info("Embedding provider unavailable; switching to local hashing vectors")
+            self.use_fallback()
+            return self.active.embed_texts(texts)
+
+    @property
+    def index_name(self) -> str:
+        return self.active.index_name
+
+
 def _tokenize(text: str) -> list[str]:
     normalized = text.lower()
     words = re.findall(r"[a-z0-9_]+", normalized)
@@ -95,6 +138,6 @@ has_api_key = bool(
     settings.dashscope_api_key and settings.dashscope_api_key != "your_dashscope_api_key"
 )
 if settings.embedding_provider == "dashscope" and has_api_key:
-    embedding_service = DashScopeEmbeddingService()
+    embedding_service = ResilientEmbeddingService(DashScopeEmbeddingService())
 else:
-    embedding_service = HashingEmbeddingService()
+    embedding_service = ResilientEmbeddingService(HashingEmbeddingService())

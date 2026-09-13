@@ -5,8 +5,10 @@ from app.api import admin as admin_api
 from app.api import chat as chat_api
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.services.embedding_service import HashingEmbeddingService, ResilientEmbeddingService
 from app.services.rag_service import RagService
 from app.services.startup_recovery import recover_interrupted_documents
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -15,6 +17,26 @@ def _create_kb(client: TestClient, name: str = "Spark") -> dict[str, Any]:
     response = client.post("/api/kbs", json={"name": name, "category": "大数据"})
     assert response.status_code == 201
     return response.json()
+
+
+class _FailingEmbeddingProvider:
+    index_name = "unavailable_remote"
+
+    def embed_texts(self, _texts: list[str]) -> list[list[float]]:
+        raise HTTPException(status_code=502, detail="remote unavailable")
+
+
+def test_embedding_provider_falls_back_to_local_after_runtime_failure() -> None:
+    service = ResilientEmbeddingService(
+        _FailingEmbeddingProvider(),
+        HashingEmbeddingService(),
+    )
+
+    vectors = service.embed_texts(["Spark RDD lineage"])
+
+    assert service.index_name == "hashing_v1"
+    assert len(vectors) == 1
+    assert len(vectors[0]) == 384
 
 
 def test_learning_record_crud_and_link_validation(client: TestClient) -> None:

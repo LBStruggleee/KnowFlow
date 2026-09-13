@@ -7,11 +7,6 @@ from app.models.document_chunk import DocumentChunk
 from app.services.embedding_service import embedding_service
 
 CHROMA_DIR = BASE_DIR / "storage" / "chroma"
-COLLECTION_NAME = (
-    "knowflow_chunks"
-    if embedding_service.index_name == "hashing_v1"
-    else f"knowflow_chunks_{embedding_service.index_name}"
-)
 UPSERT_BATCH_SIZE = 100
 logger = logging.getLogger(__name__)
 
@@ -20,14 +15,20 @@ class VectorStoreService:
     def __init__(self) -> None:
         CHROMA_DIR.mkdir(parents=True, exist_ok=True)
         self.client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-        self.collection = self.client.get_or_create_collection(
-            name=COLLECTION_NAME,
+
+    def _collection_for(self, index_name: str):
+        return self.client.get_or_create_collection(
+            name=_collection_name(index_name),
             metadata={"hnsw:space": "cosine"},
         )
 
     @property
+    def collection(self):
+        return self._collection_for(embedding_service.index_name)
+
+    @property
     def collection_name(self) -> str:
-        return COLLECTION_NAME
+        return _collection_name(embedding_service.index_name)
 
     @property
     def embedding_provider(self) -> str:
@@ -39,6 +40,7 @@ class VectorStoreService:
 
         documents = [chunk.content for chunk in chunks]
         embeddings = embedding_service.embed_texts(documents)
+        collection = self.collection
         ids = [_chunk_vector_id(chunk.id) for chunk in chunks]
         metadatas = [
             {
@@ -52,30 +54,39 @@ class VectorStoreService:
 
         for start in range(0, len(ids), UPSERT_BATCH_SIZE):
             end = start + UPSERT_BATCH_SIZE
-            self.collection.upsert(
+            collection.upsert(
                 ids=ids[start:end],
                 embeddings=embeddings[start:end],
                 documents=documents[start:end],
                 metadatas=metadatas[start:end],
             )
-        logger.info("Indexed %s chunks in collection %s", len(chunks), COLLECTION_NAME)
+        logger.info("Indexed %s chunks in collection %s", len(chunks), collection.name)
 
     def delete_chunks(self, chunk_ids: list[int]) -> None:
         if not chunk_ids:
             return
-        self.collection.delete(ids=[_chunk_vector_id(chunk_id) for chunk_id in chunk_ids])
+        for collection in self._known_collections():
+            collection.delete(ids=[_chunk_vector_id(chunk_id) for chunk_id in chunk_ids])
 
     def delete_document(self, document_id: int) -> None:
-        self.collection.delete(where={"document_id": document_id})
+        for collection in self._known_collections():
+            collection.delete(where={"document_id": document_id})
 
     def delete_knowledge_base(self, kb_id: int) -> None:
-        self.collection.delete(where={"kb_id": kb_id})
+        for collection in self._known_collections():
+            collection.delete(where={"kb_id": kb_id})
 
     def search(self, kb_id: int, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        if self.collection.count() == 0:
-            return []
+        collection = self.collection
+        fallback = embedding_service.fallback
+        fallback_collection = self._collection_for(fallback.index_name)
+        if collection.count() == 0 and fallback_collection.count() > 0:
+            embedding_service.use_fallback()
         query_embedding = embedding_service.embed_text(query)
-        result = self.collection.query(
+        collection = self.collection
+        if collection.count() == 0:
+            return []
+        result = collection.query(
             query_embeddings=[query_embedding],
             n_results=top_k,
             where={"kb_id": kb_id},
@@ -100,9 +111,17 @@ class VectorStoreService:
             )
         return matches
 
+    def _known_collections(self) -> list[Any]:
+        index_names = {embedding_service.primary.index_name, embedding_service.fallback.index_name}
+        return [self._collection_for(index_name) for index_name in index_names]
+
 
 def _chunk_vector_id(chunk_id: int) -> str:
     return f"chunk-{chunk_id}"
+
+
+def _collection_name(index_name: str) -> str:
+    return "knowflow_chunks" if index_name == "hashing_v1" else f"knowflow_chunks_{index_name}"
 
 
 vector_store_service = VectorStoreService()
