@@ -7,6 +7,7 @@ from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.services.embedding_service import HashingEmbeddingService, ResilientEmbeddingService
 from app.services.rag_service import RagService
+from app.services.settings_service import DEFAULT_SETTINGS, ensure_default_settings
 from app.services.startup_recovery import recover_interrupted_documents
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -37,6 +38,19 @@ def test_embedding_provider_falls_back_to_local_after_runtime_failure() -> None:
     assert service.index_name == "hashing_v1"
     assert len(vectors) == 1
     assert len(vectors[0]) == 384
+
+
+def test_default_settings_initialization_is_idempotent(db_session: Session) -> None:
+    from app.models.system_setting import SystemSetting
+
+    db_session.add(SystemSetting(key="top_k", value="12", description="custom"))
+    db_session.commit()
+
+    ensure_default_settings(db_session)
+    ensure_default_settings(db_session)
+
+    assert db_session.query(SystemSetting).count() == len(DEFAULT_SETTINGS)
+    assert db_session.get(SystemSetting, "top_k").value == "12"
 
 
 def test_learning_record_crud_and_link_validation(client: TestClient) -> None:

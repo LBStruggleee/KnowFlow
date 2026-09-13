@@ -1,4 +1,5 @@
 from app.models.system_setting import SystemSetting
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 DEFAULT_SETTINGS: dict[str, tuple[str, str]] = {
@@ -12,13 +13,13 @@ DEFAULT_SETTINGS: dict[str, tuple[str, str]] = {
 
 
 def ensure_default_settings(db: Session) -> None:
-    changed = False
-    for key, (value, description) in DEFAULT_SETTINGS.items():
-        if db.get(SystemSetting, key) is None:
-            db.add(SystemSetting(key=key, value=value, description=description))
-            changed = True
-    if changed:
-        db.commit()
+    values = [
+        {"key": key, "value": value, "description": description}
+        for key, (value, description) in DEFAULT_SETTINGS.items()
+    ]
+    statement = insert(SystemSetting).values(values).on_conflict_do_nothing(index_elements=["key"])
+    db.execute(statement)
+    db.commit()
 
 
 def get_settings(db: Session) -> dict[str, str]:
