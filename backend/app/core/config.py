@@ -39,7 +39,7 @@ class Settings:
         self.embedding_batch_size = _positive_int("EMBEDDING_BATCH_SIZE", 10)
         self.cors_origins = _csv(
             "CORS_ORIGINS",
-            "http://127.0.0.1:5173,http://localhost:5173",
+            "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174",
         )
 
 

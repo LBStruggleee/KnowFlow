@@ -40,6 +40,7 @@ def commit_or_conflict(db) -> None:
         safe_commit(db)
     except CommitConflictError as exc:
         from fastapi import HTTPException
+
         raise HTTPException(
             status_code=409,
             detail="Resource already exists.",

@@ -6,9 +6,11 @@ from app.api.conversations import router as conversations_router
 from app.api.documents import router as documents_router
 from app.api.health import router as health_router
 from app.api.knowledge_bases import router as knowledge_bases_router
+from app.api.learning_records import router as learning_records_router
 from app.api.vector_search import router as vector_search_router
 from app.core.config import settings
-from app.core.database import Base, engine
+from app.core.database import Base, SessionLocal, engine
+from app.services.startup_recovery import recover_interrupted_documents
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -26,6 +28,8 @@ def create_app() -> FastAPI:
     )
 
     Base.metadata.create_all(bind=engine)
+    with SessionLocal() as db:
+        recover_interrupted_documents(db)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -40,6 +44,7 @@ def create_app() -> FastAPI:
     application.include_router(vector_search_router)
     application.include_router(chat_router)
     application.include_router(conversations_router)
+    application.include_router(learning_records_router)
     application.include_router(admin_router)
 
     @application.get("/")

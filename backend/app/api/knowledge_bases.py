@@ -8,6 +8,7 @@ from app.models.conversation import ChatMessage, Conversation
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.knowledge_base import KnowledgeBase
+from app.models.learning_record import LearningRecord
 from app.schemas.knowledge_base import (
     IndexRebuildRead,
     KnowledgeBaseCreate,
@@ -101,6 +102,7 @@ def delete_knowledge_base(
     file_paths = [Path(document.file_path) for document in documents]
 
     db.query(ChatMessage).filter(ChatMessage.kb_id == kb_id).delete()
+    db.query(LearningRecord).filter(LearningRecord.kb_id == kb_id).delete()
     db.query(Conversation).filter(Conversation.kb_id == kb_id).delete()
     db.query(DocumentChunk).filter(DocumentChunk.kb_id == kb_id).delete()
     db.query(Document).filter(Document.kb_id == kb_id).delete()

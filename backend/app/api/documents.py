@@ -17,6 +17,7 @@ from app.services.document_processing_service import (
 )
 from app.services.vector_store_service import vector_store_service
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -168,6 +169,24 @@ def get_document(
     return _document_read(db, document)
 
 
+@router.get("/documents/{document_id}/file", response_class=FileResponse)
+def get_document_file(
+    document_id: int,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    document = db.get(Document, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    file_path = Path(document.file_path)
+    try:
+        file_path.resolve().relative_to(UPLOAD_DIR.resolve())
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Document file not found.") from exc
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Document file not found.")
+    return FileResponse(file_path, filename=document.file_name)
+
+
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(
     document_id: int,
@@ -231,7 +250,14 @@ def _document_read(
             )
             or 0
         )
-    return DocumentRead.model_validate({**document.__dict__, "chunk_count": int(chunk_count)})
+    file_path = Path(document.file_path)
+    try:
+        file_size = file_path.stat().st_size
+    except OSError:
+        file_size = 0
+    return DocumentRead.model_validate(
+        {**document.__dict__, "chunk_count": int(chunk_count), "file_size": file_size}
+    )
 
 
 def _safe_unlink(file_path: Path) -> None:

@@ -6,6 +6,8 @@ DEFAULT_SETTINGS: dict[str, tuple[str, str]] = {
     "score_threshold": ("0.0", "低相关度拒答阈值，0 表示不启用"),
     "qwen_model": ("qwen-plus", "默认调用的千问模型"),
     "temperature": ("0.2", "LLM 生成温度"),
+    "privacy_mode": ("hybrid", "资料处理模式：local、hybrid 或 cloud"),
+    "glass_variant": ("balanced", "界面玻璃材质强度"),
 }
 
 
@@ -54,4 +56,6 @@ def typed_settings(db: Session) -> dict[str, object]:
         "score_threshold": float(values["score_threshold"]),
         "qwen_model": values["qwen_model"],
         "temperature": float(values["temperature"]),
+        "privacy_mode": values["privacy_mode"],
+        "glass_variant": values["glass_variant"],
     }

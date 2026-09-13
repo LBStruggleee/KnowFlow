@@ -21,6 +21,14 @@ class QwenLLMService:
                 timeout=settings.llm_timeout_seconds,
             )
 
+    @property
+    def available(self) -> bool:
+        return (
+            self.client is not None
+            and bool(self.api_key)
+            and self.api_key != "your_dashscope_api_key"
+        )
+
     def chat(
         self,
         system_prompt: str,
@@ -29,7 +37,7 @@ class QwenLLMService:
         model: str | None = None,
         temperature: float = 0.2,
     ) -> dict[str, Any]:
-        if self.client is None or not self.api_key or self.api_key == "your_dashscope_api_key":
+        if not self.available:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="DASHSCOPE_API_KEY is not configured. Please set it in backend/.env.",

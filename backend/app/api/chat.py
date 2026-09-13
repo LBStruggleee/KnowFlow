@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.db_utils import safe_commit
 from app.models.conversation import ChatMessage, Conversation
+from app.models.document import Document
 from app.models.knowledge_base import KnowledgeBase
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.rag_service import rag_service
@@ -42,11 +43,14 @@ def chat(
             model=str(config["qwen_model"]),
             temperature=float(config["temperature"]),
             history=history_messages,
+            mode=payload.mode,
+            privacy_mode=str(config["privacy_mode"]),
         )
     except Exception:
         db.rollback()
         raise
     usage = result.get("usage") or {}
+    result["sources"] = _enrich_sources(db, result.get("sources", []))
 
     user_message = ChatMessage(
         conversation_id=conversation.id,
@@ -67,9 +71,30 @@ def chat(
     conversation.updated_at = func.now()
     db.add_all([user_message, assistant_message])
     safe_commit(db)
+    db.refresh(assistant_message)
 
     result["conversation_id"] = conversation.id
+    result["assistant_message_id"] = assistant_message.id
     return ChatResponse(**result)
+
+
+def _enrich_sources(db: Session, sources: list[dict[str, object]]) -> list[dict[str, object]]:
+    document_ids = {int(source["document_id"]) for source in sources}
+    if not document_ids:
+        return []
+    documents = {
+        document.id: document
+        for document in db.scalars(select(Document).where(Document.id.in_(document_ids)))
+    }
+    enriched = []
+    for source in sources:
+        item = dict(source)
+        document = documents.get(int(item["document_id"]))
+        item["document_title"] = document.title if document else "已删除资料"
+        item["file_name"] = document.file_name if document else ""
+        item["location"] = f"第 {int(item['chunk_index']) + 1} 个片段"
+        enriched.append(item)
+    return enriched
 
 
 def _load_history(db: Session, conversation_id: int) -> list[dict[str, str]]:
