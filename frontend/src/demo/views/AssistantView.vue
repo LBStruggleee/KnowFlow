@@ -129,6 +129,7 @@ async function submitQuestion() {
     retrievalTrace.value = data.retrieval_trace
     await loadConversationList()
   } catch (error) {
+    question.value = content
     messages.value.push({
       id: 'error-' + Date.now(),
       role: 'assistant',
@@ -153,7 +154,7 @@ async function saveLearningRecord(type) {
       title:
         type === 'exercise'
           ? '资料练习'
-          : messages.value.find((item) => item.role === 'user')?.content?.slice(0, 80) ||
+          : [...messages.value].reverse().find((item) => item.role === 'user')?.content?.slice(0, 80) ||
             '学习笔记',
       content: message.content,
       tags: [TASK_MODES.find((mode) => mode.id === activeMode.value)?.label || '学习'],

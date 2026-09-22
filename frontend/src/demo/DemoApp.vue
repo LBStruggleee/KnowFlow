@@ -89,6 +89,10 @@ function openAssistant(conversationId = null) {
   selectView('assistant')
 }
 
+function handleDocumentsUpdated(list) {
+  documents.value = list
+}
+
 function syncHash() {
   window.history.replaceState(null, '', `#${activeView.value}`)
 }
@@ -164,7 +168,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncViewFromHash)
       </section>
       <template v-else>
         <AssistantView v-if="activeView === 'assistant'" :course="selectedCourse" :document-count="documents.length" :resume-conversation-id="resumeConversationId" @conversation-resumed="resumeConversationId = null" />
-        <KnowledgeView v-else-if="activeView === 'knowledge'" :course="selectedCourse" @documents-updated="documents = $event" />
+        <KnowledgeView v-else-if="activeView === 'knowledge'" :course="selectedCourse" @documents-updated="handleDocumentsUpdated" />
         <RecordsView v-else-if="activeView === 'records'" :course="selectedCourse" @open-assistant="openAssistant" />
         <SettingsView v-else :initial-settings="settings" :provider-status="providerStatus" :glass-variant="glassVariant" @saved="handleSettingsSaved" @update:glass-variant="glassVariant = $event" @data-cleared="loadApplication" />
       </template>
