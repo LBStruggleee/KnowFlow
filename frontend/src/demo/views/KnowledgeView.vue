@@ -21,7 +21,7 @@ import {
   retryDocument,
   uploadDocument,
 } from '../../api/client'
-import { formatDate, getApiErrorMessage, mapDocument } from '../productState'
+import { formatDate, getApiErrorMessage, getDocumentPollDelay, mapDocument } from '../productState'
 
 const props = defineProps({ course: { type: Object, required: true } })
 const emit = defineEmits(['documents-updated'])
@@ -37,6 +37,8 @@ const isUploading = ref(false)
 const isRebuilding = ref(false)
 const fileInput = ref(null)
 let pollTimer = null
+let pollAttempt = 0
+let lastProcessingIds = ''
 
 const filters = [
   { id: 'all', label: '全部' },
@@ -66,8 +68,19 @@ function statusLabel(status) {
 
 function schedulePoll() {
   if (pollTimer) window.clearTimeout(pollTimer)
-  if (!processingDocuments.value.length) return
-  pollTimer = window.setTimeout(loadDocuments, 1600)
+  const processingIds = processingDocuments.value.map((document) => document.id).join(',')
+  if (!processingIds) {
+    lastProcessingIds = ''
+    pollAttempt = 0
+    return
+  }
+  if (processingIds !== lastProcessingIds) {
+    lastProcessingIds = processingIds
+    pollAttempt = 0
+  }
+  const delay = getDocumentPollDelay(pollAttempt)
+  pollAttempt += 1
+  pollTimer = window.setTimeout(loadDocuments, delay)
 }
 
 async function loadDocuments() {
@@ -79,10 +92,10 @@ async function loadDocuments() {
       selectedDocumentId.value = documents.value[0]?.id ?? null
     }
     emit('documents-updated', data)
-    schedulePoll()
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error, '无法读取课程资料。'))
   }
+  schedulePoll()
 }
 
 async function handleFileSelected(event) {
@@ -156,6 +169,9 @@ watch(filteredDocuments, (items) => {
 })
 onBeforeUnmount(() => {
   if (pollTimer) window.clearTimeout(pollTimer)
+  pollTimer = null
+  pollAttempt = 0
+  lastProcessingIds = ''
 })
 </script>
 

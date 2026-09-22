@@ -4,6 +4,7 @@ import {
   formatBytes,
   getApiErrorMessage,
   getCourseMeta,
+  getDocumentPollDelay,
   mapDocument,
   TASK_MODES,
 } from './productState'
@@ -52,5 +53,16 @@ describe('product state mapping', () => {
     )
     expect(formatBytes(0)).toBe('0 B')
     expect(TASK_MODES).toHaveLength(5)
+  })
+
+  it('backs off document polling delays and caps them', () => {
+    expect(getDocumentPollDelay(0)).toBe(1600)
+    expect(getDocumentPollDelay(1)).toBe(3200)
+    expect(getDocumentPollDelay(2)).toBe(6400)
+    expect(getDocumentPollDelay(3)).toBe(10000)
+    expect(getDocumentPollDelay(10)).toBe(10000)
+    expect(getDocumentPollDelay(-5)).toBe(1600)
+    expect(getDocumentPollDelay(undefined)).toBe(1600)
+    expect(getDocumentPollDelay(Number.NaN)).toBe(1600)
   })
 })

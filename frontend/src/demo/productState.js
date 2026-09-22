@@ -73,6 +73,11 @@ export function combineLearningRecords(conversations, records, courseName) {
   return [...conversationItems, ...learningItems].sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
+export function getDocumentPollDelay(attempt) {
+  const step = Number.isFinite(attempt) ? Math.max(0, Math.floor(attempt)) : 0
+  return Math.min(1600 * 2 ** step, 10000)
+}
+
 export function getApiErrorMessage(error, fallback = '操作失败，请稍后重试。') {
   const detail = error?.response?.data?.detail
   if (typeof detail === 'string' && detail.trim()) return detail
