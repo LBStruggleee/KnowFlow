@@ -40,3 +40,7 @@ tmp/
 .obsidian/
 .DS_Store
 Thumbs.db
+
+# Generated artifacts
+generated/
+.superpowers/

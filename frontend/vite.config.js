@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 export default defineConfig({
   plugins: [vue()],
   build: {
+    chunkSizeWarningLimit: 1200,
     rolldownOptions: {
       input: {
         app: resolve(import.meta.dirname, 'index.html'),

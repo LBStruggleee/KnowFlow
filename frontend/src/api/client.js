@@ -5,6 +5,10 @@ const api = axios.create({
   timeout: 60000,
 })
 
+export function getApiBaseUrl() {
+  return api.defaults.baseURL
+}
+
 export function listKnowledgeBases() {
   return api.get('/api/kbs')
 }
@@ -33,14 +37,23 @@ export function retryDocument(documentId) {
   return api.post(`/api/documents/${documentId}/retry`)
 }
 
-export function uploadDocument(kbId, file) {
+export function uploadDocument(kbId, file, onProgress) {
   const formData = new FormData()
   formData.append('file', file)
   return api.post(`/api/kbs/${kbId}/documents/upload`, formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
+    onUploadProgress: onProgress,
   })
+}
+
+export function getDocumentFileUrl(documentId) {
+  return `${getApiBaseUrl()}/api/documents/${documentId}/file`
+}
+
+export function rebuildKnowledgeBaseIndex(kbId) {
+  return api.post(`/api/kbs/${kbId}/rebuild-index`)
 }
 
 export function listDocumentChunks(documentId) {
@@ -78,4 +91,35 @@ export function getSystemSettings() {
 
 export function updateSystemSettings(payload) {
   return api.patch('/api/admin/settings', payload)
+}
+
+export function getProviderStatus() {
+  return api.get('/api/admin/providers')
+}
+
+export function listLearningRecords(kbId, recordType) {
+  const params = {}
+  if (kbId) params.kb_id = kbId
+  if (recordType) params.record_type = recordType
+  return api.get('/api/learning-records', { params })
+}
+
+export function createLearningRecord(payload) {
+  return api.post('/api/learning-records', payload)
+}
+
+export function updateLearningRecord(recordId, payload) {
+  return api.patch(`/api/learning-records/${recordId}`, payload)
+}
+
+export function deleteLearningRecord(recordId) {
+  return api.delete(`/api/learning-records/${recordId}`)
+}
+
+export function exportAllData() {
+  return api.get('/api/admin/export')
+}
+
+export function clearAllData() {
+  return api.delete('/api/admin/data', { params: { confirmation: 'DELETE' } })
 }
