@@ -115,7 +115,7 @@ KnowFlow/
 需要 Python 3.13。
 
 ```powershell
-cd D:\bruce\KnowFlow\backend
+cd D:\KnowFlow\backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -154,7 +154,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ### 2. 前端
 
 ```powershell
-cd D:\bruce\KnowFlow\frontend
+cd D:\KnowFlow\frontend
 npm install
 Copy-Item .env.example .env.local
 npm run dev -- --host 127.0.0.1 --port 5173
@@ -173,7 +173,7 @@ VITE_API_BASE=http://127.0.0.1:8000
 安装开发依赖：
 
 ```powershell
-cd D:\bruce\KnowFlow
+cd D:\KnowFlow
 cd backend
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
@@ -189,7 +189,7 @@ pip-audit -r requirements.txt --ignore-vuln PYSEC-2026-311
 执行前端检查：
 
 ```powershell
-cd D:\bruce\KnowFlow\frontend
+cd D:\KnowFlow\frontend
 npm test
 npm run build
 npm audit --audit-level=high

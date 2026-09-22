@@ -5,7 +5,7 @@ FastAPI backend for KnowFlow（知汇）.
 ## Run
 
 ```powershell
-cd D:\bruce\KnowFlow\backend
+cd D:\KnowFlow\backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt

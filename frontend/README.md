@@ -7,7 +7,7 @@ Vue 3 frontend for KnowFlow（知汇）.
 Start the backend first:
 
 ```powershell
-cd D:\bruce\KnowFlow\backend
+cd D:\KnowFlow\backend
 .\.venv\Scripts\Activate.ps1
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
@@ -15,7 +15,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 Start the frontend:
 
 ```powershell
-cd D:\bruce\KnowFlow\frontend
+cd D:\KnowFlow\frontend
 npm install
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
