@@ -123,8 +123,8 @@ def process_document_record(db: Session, document_id: int) -> None:
         )
     except Exception as exc:
         logger.exception("Document processing failed id=%s", document_id)
-        db.rollback()
         chunk_ids = [chunk.id for chunk in document_chunks if chunk.id is not None]
+        db.rollback()
         try:
             vector_store_service.delete_chunks(chunk_ids)
         except Exception:

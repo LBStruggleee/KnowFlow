@@ -93,3 +93,27 @@ def test_clear_document_sections_is_idempotent(db_session: Session, tmp_path: Pa
     clear_document_sections(db_session, document.id)
 
     assert db_session.scalars(select(DocumentSection)).all() == []
+
+
+def test_failed_processing_compensates_indexed_vectors(
+    db_session: Session, monkeypatch, tmp_path: Path
+) -> None:
+    deleted: list[list[int]] = []
+
+    def _boom(_chunks, _paths=None):
+        raise RuntimeError("chroma down")
+
+    monkeypatch.setattr(document_processing_service.vector_store_service, "add_chunks", _boom)
+    monkeypatch.setattr(
+        document_processing_service.vector_store_service,
+        "delete_chunks",
+        lambda _ids: deleted.append(list(_ids)),
+    )
+    document = _create_finished_document(db_session, tmp_path, "补偿", "# 第一章\n\n正文\n")
+
+    process_document_record(db_session, document.id)
+
+    assert db_session.get(Document, document.id).status == "failed"
+    assert len(deleted) == 1
+    assert len(deleted[0]) == 1
+    assert isinstance(deleted[0][0], int)
