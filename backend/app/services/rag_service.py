@@ -1,10 +1,9 @@
 from typing import Any
 
-from sqlalchemy.orm import Session
-
 from app.services.hybrid_search import search_hybrid
 from app.services.llm_service import llm_service
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
 SYSTEM_PROMPT = """你是 KnowFlow（知汇）中的大数据课程学习助手。
 请严格基于给定参考资料回答用户问题。

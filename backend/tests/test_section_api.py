@@ -222,7 +222,9 @@ def test_vector_search_results_carry_section_path(client: TestClient, monkeypatc
     assert result["section_path"] == "chat / 第一章"
 
 
-def _upload_term_doc(client: TestClient, db_session, monkeypatch, tmp_path: Path, kb_id: int) -> None:
+def _upload_term_doc(
+    client: TestClient, db_session, monkeypatch, tmp_path: Path, kb_id: int
+) -> None:
     from app.api import documents as documents_api
     from app.services import document_processing_service
 
@@ -249,7 +251,8 @@ def test_chat_lexical_channel_hits_term(
 ) -> None:
     kb = _create_kb(client, "LexicalChatKB")
     _upload_term_doc(client, db_session, monkeypatch, tmp_path, kb["id"])
-    assert client.patch("/api/admin/settings", json={"retrieval_channels": "lexical"}).status_code == 200
+    settings_response = client.patch("/api/admin/settings", json={"retrieval_channels": "lexical"})
+    assert settings_response.status_code == 200
 
     response = client.post("/api/chat", json={"kb_id": kb["id"], "question": "NameNode是什么"})
 

@@ -32,10 +32,19 @@ const topK = ref(8)
 const threshold = ref(0.62)
 const qwenModel = ref('qwen-plus')
 const temperature = ref(0.2)
+const retrievalChannels = ref('hybrid')
 const currentProviders = ref(props.providerStatus)
 const saving = ref(false)
 const saved = ref(false)
 
+const channelOptions = [
+  { id: 'vector', label: '语义检索' },
+  { id: 'lexical', label: '词面检索' },
+  { id: 'hybrid', label: '混合检索' },
+]
+const channelBadge = computed(
+  () => channelOptions.find((option) => option.id === retrievalChannels.value)?.label || '混合检索',
+)
 const privacyDescription = computed(() => ({
   local: '资料、向量和回答全部在本机处理，不产生外部回答模型请求。',
   hybrid: '原始资料保留在本机，仅将命中的少量片段发送给已配置的回答模型。',
@@ -77,6 +86,7 @@ watch(
     threshold.value = value.score_threshold
     qwenModel.value = value.qwen_model
     temperature.value = value.temperature
+    retrievalChannels.value = value.retrieval_channels || 'hybrid'
   },
   { immediate: true },
 )
@@ -92,6 +102,7 @@ async function saveSettings() {
       score_threshold: threshold.value,
       qwen_model: qwenModel.value,
       temperature: temperature.value,
+      retrieval_channels: retrievalChannels.value,
       glass_variant: props.glassVariant,
     })
     emit('saved', data)
@@ -170,7 +181,7 @@ async function clearData() {
 
         <section id="models" class="settings-section content-panel" tabindex="-1"><header><div><span class="eyebrow">Providers</span><h2>模型服务</h2><p>显示回答、向量化和索引实际使用的服务。</p></div><button class="icon-button glass-control" type="button" aria-label="检查连接" title="检查连接" @click="refreshProviders()"><el-icon><Refresh /></el-icon></button></header><div class="provider-list"><div v-for="provider in providers" :key="provider.id"><span class="provider-mark">{{ provider.name.slice(0, 1).toUpperCase() }}</span><span><strong>{{ provider.name }}</strong><em>{{ provider.role }}</em></span><span class="provider-location">{{ provider.location }}</span><span :class="['provider-status', { unavailable: !provider.healthy }]"><i></i>{{ provider.status }}</span></div></div></section>
 
-        <section id="retrieval" class="settings-section content-panel" tabindex="-1"><header><div><span class="eyebrow">Retrieval</span><h2>检索策略</h2><p>控制候选片段数量和依据不足时的拒答边界。</p></div><span class="strategy-badge">语义检索</span></header><div class="slider-setting"><label><strong>候选片段数</strong><span>检索后提供给回答模块的片段上限</span></label><el-slider v-model="topK" :min="1" :max="20" :show-tooltip="false" @change="saved = false" /><output>{{ topK }}</output></div><div class="slider-setting"><label><strong>拒答阈值</strong><span>低于阈值时明确说明资料依据不足</span></label><el-slider v-model="threshold" :min="0" :max="1" :step="0.01" :show-tooltip="false" @change="saved = false" /><output>{{ threshold.toFixed(2) }}</output></div><div class="slider-setting"><label><strong>回答温度</strong><span>数值越低，回答越稳定和保守</span></label><el-slider v-model="temperature" :min="0" :max="2" :step="0.05" :show-tooltip="false" @change="saved = false" /><output>{{ temperature.toFixed(2) }}</output></div></section>
+        <section id="retrieval" class="settings-section content-panel" tabindex="-1"><header><div><span class="eyebrow">Retrieval</span><h2>检索策略</h2><p>控制候选片段数量和依据不足时的拒答边界。</p></div><span class="strategy-badge">{{ channelBadge }}</span></header><div class="segmented-control channel-segments"><button v-for="option in channelOptions" :key="option.id" type="button" :class="{ active: retrievalChannels === option.id }" @click="retrievalChannels = option.id; saved = false">{{ option.label }}</button></div><div class="slider-setting"><label><strong>候选片段数</strong><span>检索后提供给回答模块的片段上限</span></label><el-slider v-model="topK" :min="1" :max="20" :show-tooltip="false" @change="saved = false" /><output>{{ topK }}</output></div><div class="slider-setting"><label><strong>拒答阈值</strong><span>低于阈值时明确说明资料依据不足</span></label><el-slider v-model="threshold" :min="0" :max="1" :step="0.01" :show-tooltip="false" @change="saved = false" /><output>{{ threshold.toFixed(2) }}</output></div><div class="slider-setting"><label><strong>回答温度</strong><span>数值越低，回答越稳定和保守</span></label><el-slider v-model="temperature" :min="0" :max="2" :step="0.05" :show-tooltip="false" @change="saved = false" /><output>{{ temperature.toFixed(2) }}</output></div></section>
 
         <section id="appearance" class="settings-section content-panel" tabindex="-1"><header><div><span class="eyebrow">Appearance</span><h2>Liquid Glass 强度</h2><p>切换材质表现，内容和信息层级保持不变。</p></div></header><div class="appearance-options"><button v-for="variant in [{ id: 'clear', title: '清透', meta: '更强背景折射' }, { id: 'balanced', title: '平衡', meta: '默认阅读体验' }, { id: 'contrast', title: '高对比', meta: '降低透明效果' }]" :key="variant.id" type="button" :class="{ active: props.glassVariant === variant.id }" @click="updateAppearance(variant.id)"><span :class="['glass-swatch', `swatch-${variant.id}`]"></span><strong>{{ variant.title }}</strong><em>{{ variant.meta }}</em></button></div></section>
 

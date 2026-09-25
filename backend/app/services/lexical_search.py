@@ -2,13 +2,12 @@ import logging
 import re
 from typing import Any
 
+from app.models.document_chunk import DocumentChunk
+from app.models.document_section import DocumentSection
 from sqlalchemy import or_, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
-
-from app.models.document_chunk import DocumentChunk
-from app.models.document_section import DocumentSection
 
 logger = logging.getLogger(__name__)
 
@@ -114,9 +113,7 @@ def backfill_search_text(db: Session, batch_size: int = BACKFILL_BATCH_SIZE) -> 
     while True:
         ids = list(
             db.scalars(
-                select(DocumentChunk.id)
-                .where(DocumentChunk.search_text == "")
-                .limit(batch_size)
+                select(DocumentChunk.id).where(DocumentChunk.search_text == "").limit(batch_size)
             )
         )
         if not ids:
@@ -196,7 +193,11 @@ def search_lexical(
             "kb_id": int(row["kb_id"]),
             "chunk_index": int(row["chunk_index"]),
             "content": str(row["content"]),
-            "score": 1.0 if highest == lowest else (highest - float(row["rank_value"])) / (highest - lowest),
+            "score": (
+                1.0
+                if highest == lowest
+                else (highest - float(row["rank_value"])) / (highest - lowest)
+            ),
             "section_path": paths.get(row["section_id"], "") if row["section_id"] else "",
         }
         for row in rows
@@ -208,22 +209,19 @@ def _search_like(
     db: Session, kb_id: int, query: str, limit: int
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     pattern = f"%{_escape_like(query)}%"
-    rows = (
-        db.execute(
-            select(DocumentChunk, DocumentSection.section_path)
-            .outerjoin(DocumentSection, DocumentSection.id == DocumentChunk.section_id)
-            .where(DocumentChunk.kb_id == kb_id)
-            .where(
-                or_(
-                    DocumentChunk.content.like(pattern, escape="\\"),
-                    DocumentSection.section_path.like(pattern, escape="\\"),
-                )
+    rows = db.execute(
+        select(DocumentChunk, DocumentSection.section_path)
+        .outerjoin(DocumentSection, DocumentSection.id == DocumentChunk.section_id)
+        .where(DocumentChunk.kb_id == kb_id)
+        .where(
+            or_(
+                DocumentChunk.content.like(pattern, escape="\\"),
+                DocumentSection.section_path.like(pattern, escape="\\"),
             )
-            .order_by(DocumentChunk.document_id, DocumentChunk.chunk_index)
-            .limit(limit)
         )
-        .all()
-    )
+        .order_by(DocumentChunk.document_id, DocumentChunk.chunk_index)
+        .limit(limit)
+    ).all()
     hits = [
         {
             "chunk_id": chunk.id,
@@ -236,4 +234,8 @@ def _search_like(
         }
         for rank, (chunk, section_path) in enumerate(rows)
     ]
-    return hits, {"returned": len(hits), "best": hits[0]["score"] if hits else 0.0, "fallback": "like"}
+    return hits, {
+        "returned": len(hits),
+        "best": hits[0]["score"] if hits else 0.0,
+        "fallback": "like",
+    }

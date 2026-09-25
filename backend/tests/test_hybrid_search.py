@@ -45,13 +45,20 @@ def _hit(chunk_id: int, score: float) -> dict:
 
 def test_search_hybrid_fuses_both_channels(monkeypatch) -> None:
     monkeypatch.setattr(
-        hybrid_module.vector_store_service, "search", lambda kb_id, query, top_k: [
-            _hit(2, 0.8), _hit(1, 0.9),
-        ]
+        hybrid_module.vector_store_service,
+        "search",
+        lambda kb_id, query, top_k: [
+            _hit(2, 0.8),
+            _hit(1, 0.9),
+        ],
     )
     monkeypatch.setattr(
-        hybrid_module, "search_lexical",
-        lambda db, kb_id, query, top_k: ([_hit(2, 1.0), _hit(3, 0.5)], {"returned": 2, "best": 1.0, "fallback": None}),
+        hybrid_module,
+        "search_lexical",
+        lambda db, kb_id, query, top_k: (
+            [_hit(2, 1.0), _hit(3, 0.5)],
+            {"returned": 2, "best": 1.0, "fallback": None},
+        ),
     )
 
     result = search_hybrid(object(), kb_id=1, query="测试", top_k=2, channels="hybrid")
@@ -82,7 +89,8 @@ def test_search_hybrid_normalizes_unknown_channels(monkeypatch) -> None:
         hybrid_module.vector_store_service, "search", lambda kb_id, query, top_k: [_hit(1, 0.9)]
     )
     monkeypatch.setattr(
-        hybrid_module, "search_lexical",
+        hybrid_module,
+        "search_lexical",
         lambda db, kb_id, query, top_k: ([], {"returned": 0, "best": 0.0, "fallback": None}),
     )
 

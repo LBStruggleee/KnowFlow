@@ -123,9 +123,7 @@ def test_backfill_search_text_fills_legacy_rows(db_session: Session) -> None:
 def test_ensure_lexical_index_is_idempotent(db_session: Session) -> None:
     assert ensure_lexical_index(db_session.get_bind()) is True
     assert ensure_lexical_index(db_session.get_bind()) is True
-    tables = db_session.execute(
-        text("SELECT name FROM sqlite_master WHERE name='chunk_fts'")
-    ).all()
+    tables = db_session.execute(text("SELECT name FROM sqlite_master WHERE name='chunk_fts'")).all()
     assert tables != []
 
 
@@ -163,8 +161,11 @@ def _create_kb_chunks(db_session: Session) -> int:
     db_session.add(document)
     db_session.flush()
     section = DocumentSection(
-        document_id=document.id, title="第一章", section_path="课程 / 第一章",
-        section_level=1, section_order=1,
+        document_id=document.id,
+        title="第一章",
+        section_path="课程 / 第一章",
+        section_level=1,
+        section_order=1,
     )
     db_session.add(section)
     db_session.flush()
@@ -221,7 +222,7 @@ def test_search_lexical_returns_empty_for_blank_terms(db_session: Session) -> No
 
 
 def test_search_lexical_isolated_by_knowledge_base(db_session: Session) -> None:
-    kb_id = _create_kb_chunks(db_session)
+    _create_kb_chunks(db_session)
     other = KnowledgeBase(name="他库", description="", category="")
     db_session.add(other)
     db_session.commit()

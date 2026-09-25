@@ -1,10 +1,9 @@
 from typing import Any
 
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-
 from app.services.lexical_search import search_lexical
 from app.services.vector_store_service import vector_store_service
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 RRF_K = 60
 VALID_CHANNELS = ("vector", "lexical", "hybrid")
@@ -90,7 +89,5 @@ def search_hybrid(
     fused = fuse_rrf(rankings)
     ordered = sorted(fused, key=lambda chunk_id: fused[chunk_id], reverse=True)
     divisor = 2.0 * (1.0 / (RRF_K + 1))
-    hits = [
-        {**by_id[chunk_id], "score": fused[chunk_id] / divisor} for chunk_id in ordered[:top_k]
-    ]
+    hits = [{**by_id[chunk_id], "score": fused[chunk_id] / divisor} for chunk_id in ordered[:top_k]]
     return HybridResult(hits=hits, trace=trace)

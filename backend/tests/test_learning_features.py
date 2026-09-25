@@ -97,6 +97,8 @@ def test_learning_record_crud_and_link_validation(client: TestClient) -> None:
 
 
 def test_local_rag_answer_does_not_call_cloud(monkeypatch) -> None:
+    from app.services.hybrid_search import HybridResult
+
     service = RagService()
     sources = [
         {
@@ -109,8 +111,8 @@ def test_local_rag_answer_does_not_call_cloud(monkeypatch) -> None:
         }
     ]
     monkeypatch.setattr(
-        "app.services.rag_service.vector_store_service.search",
-        lambda **_kwargs: sources,
+        "app.services.rag_service.search_hybrid",
+        lambda _db, **_kwargs: HybridResult(hits=sources, trace={"mode": "hybrid"}),
     )
     monkeypatch.setattr(
         "app.services.rag_service.llm_service.chat",

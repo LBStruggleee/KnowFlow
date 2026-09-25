@@ -23,7 +23,7 @@ import {
 } from '../../api/client'
 import { getEvidencePanelState } from '../evidencePanelState'
 import { getApiErrorMessage, TASK_MODES } from '../productState'
-import { formatSourceSubtitle } from '../sourceFormat'
+import { formatChannelLabel, formatSourceSubtitle } from '../sourceFormat'
 
 const props = defineProps({
   course: { type: Object, required: true },
@@ -52,6 +52,7 @@ const bestScore = computed(() => {
   const value = retrievalTrace.value?.best_score
   return Number.isFinite(value) ? Math.round(value * 100) + '%' : '-'
 })
+const channelLabel = computed(() => formatChannelLabel(retrievalTrace.value))
 const lastAssistantMessage = computed(() =>
   [...messages.value].reverse().find((message) => message.role === 'assistant'),
 )
@@ -276,7 +277,7 @@ watch(
         <div class="evidence-summary">
           <span><i class="status-dot"></i>{{ sources.length ? '依据可查' : '等待提问' }}</span>
           <strong>{{ sources.length }} 个来源</strong>
-          <em>最高匹配 {{ bestScore }}</em>
+          <em>最高匹配 {{ bestScore }}</em><em v-if="channelLabel">{{ channelLabel }}</em>
         </div>
         <div v-if="sources.length" class="source-list">
           <button v-for="(source, index) in sources" :key="source.chunk_id" type="button" :class="['source-item', { active: selectedSourceId === source.chunk_id }]" @click="selectedSourceId = source.chunk_id">
