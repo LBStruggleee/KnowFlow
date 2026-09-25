@@ -10,6 +10,7 @@ class SystemSettingsRead(BaseModel):
     temperature: float
     privacy_mode: Literal["local", "hybrid", "cloud"]
     glass_variant: Literal["clear", "balanced", "contrast"]
+    retrieval_channels: Literal["vector", "lexical", "hybrid"]
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -19,6 +20,9 @@ class SystemSettingsUpdate(BaseModel):
     temperature: float | None = Field(default=None, ge=0, le=2)
     privacy_mode: Literal["local", "hybrid", "cloud"] | None = None
     glass_variant: Literal["clear", "balanced", "contrast"] | None = None
+    # Plain str (not Literal) so unknown values reach normalization
+    # instead of 422; update_settings coerces them to "hybrid".
+    retrieval_channels: str | None = Field(default=None)
 
 
 class ProviderStatusRead(BaseModel):

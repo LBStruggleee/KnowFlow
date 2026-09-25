@@ -9,7 +9,16 @@ DEFAULT_SETTINGS: dict[str, tuple[str, str]] = {
     "temperature": ("0.2", "LLM 生成温度"),
     "privacy_mode": ("hybrid", "资料处理模式：local、hybrid 或 cloud"),
     "glass_variant": ("balanced", "界面玻璃材质强度"),
+    "retrieval_channels": ("hybrid", "检索通道：vector、lexical 或 hybrid"),
 }
+
+
+RETRIEVAL_CHANNELS = ("vector", "lexical", "hybrid")
+
+
+def normalize_retrieval_channels(value: object) -> str:
+    text = str(value or "").strip().lower()
+    return text if text in RETRIEVAL_CHANNELS else "hybrid"
 
 
 def ensure_default_settings(db: Session) -> None:
@@ -36,6 +45,8 @@ def update_settings(db: Session, payload: dict[str, object]) -> dict[str, str]:
     for key, value in payload.items():
         if value is None or key not in DEFAULT_SETTINGS:
             continue
+        if key == "retrieval_channels":
+            value = normalize_retrieval_channels(value)
         setting = db.get(SystemSetting, key)
         if setting is None:
             setting = SystemSetting(
@@ -59,4 +70,5 @@ def typed_settings(db: Session) -> dict[str, object]:
         "temperature": float(values["temperature"]),
         "privacy_mode": values["privacy_mode"],
         "glass_variant": values["glass_variant"],
+        "retrieval_channels": str(values["retrieval_channels"]),
     }

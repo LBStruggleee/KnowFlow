@@ -50,6 +50,7 @@ def patch_system_settings(
         temperature=float(values["temperature"]),
         privacy_mode=values["privacy_mode"],
         glass_variant=values["glass_variant"],
+        retrieval_channels=values["retrieval_channels"],
     )
 
 
