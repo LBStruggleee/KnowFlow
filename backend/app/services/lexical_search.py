@@ -1,8 +1,10 @@
 import logging
 import re
+from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.models.document_chunk import DocumentChunk
@@ -138,3 +140,97 @@ def backfill_search_text(db: Session, batch_size: int = BACKFILL_BATCH_SIZE) -> 
     if total:
         logger.info("Backfilled search_text for %s chunks", total)
     return total
+
+
+FTS_SEARCH_SQL = """
+SELECT c.id AS chunk_id, c.kb_id AS kb_id, c.document_id AS document_id,
+       c.chunk_index AS chunk_index, c.content AS content, c.section_id AS section_id,
+       bm25(chunk_fts) AS rank_value
+FROM chunk_fts JOIN document_chunk AS c ON c.id = chunk_fts.rowid
+WHERE chunk_fts MATCH :terms AND c.kb_id = :kb_id
+ORDER BY rank_value LIMIT :limit
+""".strip()
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def search_lexical(
+    db: Session, kb_id: int, query: str, top_k: int
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    terms = to_search_text(query)
+    if not terms:
+        return [], {"returned": 0, "best": 0.0, "fallback": None}
+    limit = max(top_k * 2, 10)
+    try:
+        rows = (
+            db.execute(text(FTS_SEARCH_SQL), {"terms": terms, "kb_id": kb_id, "limit": limit})
+            .mappings()
+            .all()
+        )
+    except OperationalError:
+        logger.warning("chunk_fts unavailable; lexical channel uses LIKE fallback.")
+        return _search_like(db, kb_id, query, limit)
+    if not rows:
+        return [], {"returned": 0, "best": 0.0, "fallback": None}
+    ranks = [float(row["rank_value"]) for row in rows]
+    lowest, highest = min(ranks), max(ranks)
+    section_ids = {row["section_id"] for row in rows if row["section_id"] is not None}
+    paths: dict[int, str] = {}
+    if section_ids:
+        paths = dict(
+            db.execute(
+                select(DocumentSection.id, DocumentSection.section_path).where(
+                    DocumentSection.id.in_(section_ids)
+                )
+            ).all()
+        )
+    hits = [
+        {
+            "chunk_id": int(row["chunk_id"]),
+            "document_id": int(row["document_id"]),
+            "kb_id": int(row["kb_id"]),
+            "chunk_index": int(row["chunk_index"]),
+            "content": str(row["content"]),
+            "score": 1.0 if highest == lowest else (highest - float(row["rank_value"])) / (highest - lowest),
+            "section_path": paths.get(row["section_id"], "") if row["section_id"] else "",
+        }
+        for row in rows
+    ]
+    return hits, {"returned": len(hits), "best": hits[0]["score"], "fallback": None}
+
+
+def _search_like(
+    db: Session, kb_id: int, query: str, limit: int
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    pattern = f"%{_escape_like(query)}%"
+    rows = (
+        db.execute(
+            select(DocumentChunk, DocumentSection.section_path)
+            .outerjoin(DocumentSection, DocumentSection.id == DocumentChunk.section_id)
+            .where(DocumentChunk.kb_id == kb_id)
+            .where(
+                or_(
+                    DocumentChunk.content.like(pattern, escape="\\"),
+                    DocumentSection.section_path.like(pattern, escape="\\"),
+                )
+            )
+            .order_by(DocumentChunk.document_id, DocumentChunk.chunk_index)
+            .limit(limit)
+        )
+        .all()
+    )
+    hits = [
+        {
+            "chunk_id": chunk.id,
+            "document_id": chunk.document_id,
+            "kb_id": chunk.kb_id,
+            "chunk_index": chunk.chunk_index,
+            "content": chunk.content,
+            "score": 1.0 / (rank + 1),
+            "section_path": section_path or "",
+        }
+        for rank, (chunk, section_path) in enumerate(rows)
+    ]
+    return hits, {"returned": len(hits), "best": hits[0]["score"] if hits else 0.0, "fallback": "like"}

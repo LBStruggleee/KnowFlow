@@ -8,6 +8,7 @@ from app.services.lexical_search import (
     ensure_chunk_columns,
     ensure_lexical_index,
     fts5_available,
+    search_lexical,
     to_search_text,
 )
 from sqlalchemy import text
@@ -145,3 +146,99 @@ def test_ensure_chunk_columns_repairs_legacy_table(db_session: Session) -> None:
 
     columns = db_session.execute(text("PRAGMA table_info(document_chunk)")).all()
     assert "search_text" in [row[1] for row in columns]
+
+
+def _create_kb_chunks(db_session: Session) -> int:
+    knowledge_base = KnowledgeBase(name="词面KB", description="", category="")
+    db_session.add(knowledge_base)
+    db_session.flush()
+    document = Document(
+        kb_id=knowledge_base.id,
+        title="课程",
+        file_name="课程.md",
+        file_path="/tmp/课程.md",
+        file_type="md",
+        status="finished",
+    )
+    db_session.add(document)
+    db_session.flush()
+    section = DocumentSection(
+        document_id=document.id, title="第一章", section_path="课程 / 第一章",
+        section_level=1, section_order=1,
+    )
+    db_session.add(section)
+    db_session.flush()
+    for index, content in enumerate(["NameNode 是主节点", "Shuffle 原理讲解", "无关的向量内容"]):
+        db_session.add(
+            DocumentChunk(
+                kb_id=knowledge_base.id,
+                document_id=document.id,
+                chunk_index=index,
+                content=content,
+                token_count=1,
+                section_id=section.id,
+                search_text=_build_search_text(content, "课程 / 第一章"),
+            )
+        )
+    db_session.commit()
+    return knowledge_base.id
+
+
+def test_search_lexical_hits_chinese_term(db_session: Session) -> None:
+    kb_id = _create_kb_chunks(db_session)
+
+    hits, info = search_lexical(db_session, kb_id, "NameNode", top_k=5)
+
+    assert [hit["content"] for hit in hits] == ["NameNode 是主节点"]
+    assert hits[0]["section_path"] == "课程 / 第一章"
+    assert hits[0]["score"] == 1.0
+    assert info == {"returned": 1, "best": 1.0, "fallback": None}
+
+
+def test_search_lexical_matches_section_path_terms(db_session: Session) -> None:
+    kb_id = _create_kb_chunks(db_session)
+
+    hits, _ = search_lexical(db_session, kb_id, "第一章", top_k=5)
+
+    assert len(hits) == 3
+
+
+def test_search_lexical_returns_empty_for_blank_terms(db_session: Session) -> None:
+    kb_id = _create_kb_chunks(db_session)
+
+    hits, info = search_lexical(db_session, kb_id, "！！！", top_k=5)
+
+    assert hits == []
+    assert info["returned"] == 0
+
+
+def test_search_lexical_isolated_by_knowledge_base(db_session: Session) -> None:
+    kb_id = _create_kb_chunks(db_session)
+    other = KnowledgeBase(name="他库", description="", category="")
+    db_session.add(other)
+    db_session.commit()
+
+    hits, _ = search_lexical(db_session, other.id, "NameNode", top_k=5)
+
+    assert hits == []
+
+
+def test_search_lexical_falls_back_to_like_without_fts_table(db_session: Session) -> None:
+    kb_id = _create_kb_chunks(db_session)
+    db_session.execute(text("DROP TABLE chunk_fts"))
+    db_session.commit()
+
+    hits, info = search_lexical(db_session, kb_id, "Shuffle", top_k=5)
+
+    assert [hit["content"] for hit in hits] == ["Shuffle 原理讲解"]
+    assert info["fallback"] == "like"
+
+
+def test_search_like_escapes_wildcards(db_session: Session) -> None:
+    kb_id = _create_kb_chunks(db_session)
+    db_session.execute(text("DROP TABLE chunk_fts"))
+    db_session.commit()
+
+    hits, _ = search_lexical(db_session, kb_id, "100%", top_k=5)
+
+    assert hits == []
