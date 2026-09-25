@@ -167,3 +167,68 @@ def test_rebuild_keeps_chunks_when_source_file_missing(
         )
         is not None
     )
+
+
+def test_chat_sources_carry_section_path(
+    client: TestClient, db_session: Session, monkeypatch, tmp_path: Path
+) -> None:
+    from app.api import chat as chat_api
+
+    kb = _create_kb(client, "ChatKB")
+    _enable_sync_processing(client, db_session, monkeypatch, tmp_path)
+    _upload_md(client, kb["id"], "chat.md", "# 第一章\n\n正文\n")
+
+    def fake_answer(**kwargs):
+        return {
+            "answer": "测试回答",
+            "sources": [
+                {
+                    "chunk_id": 1,
+                    "document_id": 999,
+                    "kb_id": kb["id"],
+                    "chunk_index": 0,
+                    "content": "正文",
+                    "score": 0.9,
+                    "section_path": "chat / 第一章",
+                }
+            ],
+            "usage": None,
+            "retrieval_trace": None,
+        }
+
+    monkeypatch.setattr(chat_api.rag_service, "answer", fake_answer)
+    response = client.post("/api/chat", json={"kb_id": kb["id"], "question": "讲了什么"})
+
+    assert response.status_code == 200
+    (source,) = response.json()["sources"]
+    assert source["section_path"] == "chat / 第一章"
+    assert source["document_title"] == "已删除资料"
+
+
+def test_vector_search_results_carry_section_path(
+    client: TestClient, monkeypatch
+) -> None:
+    from app.services import vector_store_service as vector_store_module
+
+    kb = _create_kb(client, "SearchKB")
+    monkeypatch.setattr(
+        vector_store_module.vector_store_service,
+        "search",
+        lambda kb_id, query, top_k=5: [
+            {
+                "chunk_id": 1,
+                "document_id": 1,
+                "kb_id": kb_id,
+                "chunk_index": 0,
+                "content": "正文",
+                "score": 0.9,
+                "section_path": "chat / 第一章",
+            }
+        ],
+    )
+
+    response = client.post(f"/api/kbs/{kb['id']}/search", json={"query": "正文"})
+
+    assert response.status_code == 200
+    (result,) = response.json()["results"]
+    assert result["section_path"] == "chat / 第一章"

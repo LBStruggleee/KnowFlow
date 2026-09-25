@@ -21,6 +21,7 @@ class VectorSearchResult(BaseModel):
     chunk_index: int
     content: str
     score: float
+    section_path: str = ""
 
 
 class VectorSearchResponse(BaseModel):

@@ -93,6 +93,7 @@ def _enrich_sources(db: Session, sources: list[dict[str, object]]) -> list[dict[
         item["document_title"] = document.title if document else "已删除资料"
         item["file_name"] = document.file_name if document else ""
         item["location"] = f"第 {int(item['chunk_index']) + 1} 个片段"
+        item["section_path"] = str(source.get("section_path") or "")
         enriched.append(item)
     return enriched
 

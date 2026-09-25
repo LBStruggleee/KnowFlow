@@ -29,6 +29,7 @@ class ChatSource(BaseModel):
     document_title: str = ""
     file_name: str = ""
     location: str = ""
+    section_path: str = ""
 
 
 class ChatUsage(BaseModel):
