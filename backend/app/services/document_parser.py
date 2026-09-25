@@ -199,3 +199,86 @@ def _parse_markdown_structure(text: str) -> ParsedDocument:
         sections=assign_parent_orders(items),
         lead_content=normalize_text("\n".join(lead_lines)),
     )
+
+
+HEADING_STYLE_RE = re.compile(r"^(?:Heading|标题)\s*([1-9])$")
+HEURISTIC_HEADING_MIN_PT = 14
+HEURISTIC_HEADING_MAX_CHARS = 40
+
+
+def match_heading_style(style_name: str | None) -> int | None:
+    if not style_name:
+        return None
+    if style_name == "Title":
+        return 1
+    match = HEADING_STYLE_RE.match(style_name.strip())
+    return int(match.group(1)) if match else None
+
+
+def _paragraph_in_table(paragraph) -> bool:
+    parent = paragraph._p.getparent()
+    while parent is not None:
+        if parent.tag.endswith("}tbl"):
+            return True
+        parent = parent.getparent()
+    return False
+
+
+def _is_heuristic_heading(paragraph) -> bool:
+    text = paragraph.text.strip()
+    if not text or len(text) > HEURISTIC_HEADING_MAX_CHARS:
+        return False
+    if _paragraph_in_table(paragraph):
+        return False
+    runs = [run for run in paragraph.runs if run.text.strip()]
+    if not runs or not all(run.bold for run in runs):
+        return False
+    return all(
+        run.font.size is None or run.font.size.pt >= HEURISTIC_HEADING_MIN_PT for run in runs
+    )
+
+
+def _parse_docx_structure(file_path: Path) -> ParsedDocument:
+    document = Document(str(file_path))
+    items: list[tuple[str, int, str]] = []
+    lead_lines: list[str] = []
+    current: list[str] | None = None
+    current_title = ""
+    current_level = 0
+
+    def target() -> list[str]:
+        return current if current is not None else lead_lines
+
+    for paragraph in document.paragraphs:
+        text = paragraph.text.strip()
+        if not text:
+            continue
+        try:
+            style = paragraph.style
+            style_name = style.name if style is not None else None
+        except (AttributeError, KeyError):
+            style_name = None
+        level = match_heading_style(style_name)
+        if level is None and _is_heuristic_heading(paragraph):
+            level = 2
+        if level is not None:
+            if current is not None:
+                items.append(
+                    (current_title, current_level, normalize_text("\n\n".join(current)))
+                )
+            current, current_title, current_level = [], text, level
+            continue
+        target().append(text)
+
+    for table in document.tables:
+        for row in table.rows:
+            cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+            if cells:
+                target().append(" | ".join(cells))
+
+    if current is not None:
+        items.append((current_title, current_level, normalize_text("\n\n".join(current))))
+    return ParsedDocument(
+        sections=assign_parent_orders(items),
+        lead_content=normalize_text("\n\n".join(lead_lines)),
+    )
