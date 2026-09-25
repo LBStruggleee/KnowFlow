@@ -24,6 +24,7 @@ class DocumentChunk(Base):
         nullable=True,
         index=True,
     )
+    search_text: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

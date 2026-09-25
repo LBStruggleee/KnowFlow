@@ -95,6 +95,24 @@ def test_clear_document_sections_is_idempotent(db_session: Session, tmp_path: Pa
     assert db_session.scalars(select(DocumentSection)).all() == []
 
 
+def test_process_writes_bigram_search_text(
+    db_session: Session, monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        document_processing_service.vector_store_service,
+        "add_chunks",
+        lambda _chunks, _paths=None: None,
+    )
+    document = _create_finished_document(db_session, tmp_path, "分词", "# 第一章\n\n背景正文\n")
+
+    process_document_record(db_session, document.id)
+
+    chunks = db_session.scalars(
+        select(DocumentChunk).order_by(DocumentChunk.chunk_index)
+    ).all()
+    assert chunks[0].search_text == "背景 景正 正文 分词 第一 一章"
+
+
 def test_failed_processing_compensates_indexed_vectors(
     db_session: Session, monkeypatch, tmp_path: Path
 ) -> None:

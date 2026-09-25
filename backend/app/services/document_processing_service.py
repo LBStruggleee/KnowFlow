@@ -6,6 +6,7 @@ from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.document_section import DocumentSection
 from app.services.document_parser import ParsedDocument, parse_document_structure
+from app.services.lexical_search import _build_search_text
 from app.services.text_chunker import estimate_token_count, split_text_structured
 from app.services.vector_store_service import vector_store_service
 from sqlalchemy import select
@@ -102,6 +103,7 @@ def process_document_record(db: Session, document_id: int) -> None:
                 content=result.content,
                 token_count=estimate_token_count(result.content),
                 section_id=owner.id,
+                search_text=_build_search_text(result.content, owner.section_path),
             )
             db.add(document_chunk)
             document_chunks.append(document_chunk)
