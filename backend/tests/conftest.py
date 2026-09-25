@@ -29,6 +29,10 @@ def db_session() -> Session:
         cursor.close()
 
     Base.metadata.create_all(engine)
+    # Function-level import: lexical_search pulls models; keep test import order stable.
+    from app.services.lexical_search import ensure_lexical_index
+
+    ensure_lexical_index(engine)
     testing_session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     session = testing_session()
     try:
