@@ -173,9 +173,7 @@ def _parse_markdown_structure(text: str) -> ParsedDocument:
             atx_level, atx_title = _match_atx_heading(line)
             if atx_level:
                 if current is not None:
-                    items.append(
-                        (current_title, current_level, normalize_text("\n".join(current)))
-                    )
+                    items.append((current_title, current_level, normalize_text("\n".join(current))))
                 current, current_title, current_level = [], atx_title, atx_level
                 index += 1
                 continue
@@ -263,9 +261,7 @@ def _parse_docx_structure(file_path: Path) -> ParsedDocument:
             level = 2
         if level is not None:
             if current is not None:
-                items.append(
-                    (current_title, current_level, normalize_text("\n\n".join(current)))
-                )
+                items.append((current_title, current_level, normalize_text("\n\n".join(current))))
             current, current_title, current_level = [], text, level
             continue
         target().append(text)

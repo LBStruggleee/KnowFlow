@@ -1,6 +1,5 @@
-from pydantic import BaseModel
-
 from app.services.document_parser import ParsedSection
+from pydantic import BaseModel
 
 DEFAULT_CHUNK_SIZE = 800
 DEFAULT_CHUNK_OVERLAP = 150

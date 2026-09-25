@@ -23,6 +23,7 @@ import {
 } from '../../api/client'
 import { getEvidencePanelState } from '../evidencePanelState'
 import { getApiErrorMessage, TASK_MODES } from '../productState'
+import { formatSourceSubtitle } from '../sourceFormat'
 
 const props = defineProps({
   course: { type: Object, required: true },
@@ -280,7 +281,7 @@ watch(
         <div v-if="sources.length" class="source-list">
           <button v-for="(source, index) in sources" :key="source.chunk_id" type="button" :class="['source-item', { active: selectedSourceId === source.chunk_id }]" @click="selectedSourceId = source.chunk_id">
             <span class="source-index">{{ index + 1 }}</span>
-            <span class="source-copy"><strong>{{ source.document_title || source.file_name || '课程资料' }}</strong><em>{{ source.location }}</em></span>
+            <span class="source-copy"><strong>{{ source.document_title || source.file_name || '课程资料' }}</strong><em>{{ formatSourceSubtitle(source) }}</em></span>
             <span class="source-score">{{ Math.round(source.score * 100) }}%</span>
             <p>{{ source.content }}</p>
           </button>

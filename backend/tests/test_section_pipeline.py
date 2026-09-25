@@ -38,10 +38,15 @@ def test_process_builds_section_tree_and_chunk_links(
     db_session: Session, monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(
-        document_processing_service.vector_store_service, "add_chunks", lambda _chunks, _paths=None: None
+        document_processing_service.vector_store_service,
+        "add_chunks",
+        lambda _chunks, _paths=None: None,
     )
     document = _create_finished_document(
-        db_session, tmp_path, "大数据导论", "卷首语\n\n# 第一章\n\n章导读\n\n## 1.1 背景\n\n背景正文\n"
+        db_session,
+        tmp_path,
+        "大数据导论",
+        "卷首语\n\n# 第一章\n\n章导读\n\n## 1.1 背景\n\n背景正文\n",
     )
 
     process_document_record(db_session, document.id)
@@ -56,9 +61,7 @@ def test_process_builds_section_tree_and_chunk_links(
     ]
     assert sections[1].parent_section_id == sections[0].id
     assert sections[2].parent_section_id == sections[1].id
-    chunks = db_session.scalars(
-        select(DocumentChunk).order_by(DocumentChunk.chunk_index)
-    ).all()
+    chunks = db_session.scalars(select(DocumentChunk).order_by(DocumentChunk.chunk_index)).all()
     assert [chunk.chunk_index for chunk in chunks] == [0, 1, 2]
     by_title = {section.title: section for section in sections}
     assert chunks[0].section_id == by_title["大数据导论"].id
@@ -73,9 +76,7 @@ def test_process_cleans_sections_on_vector_failure(
     def _boom(_chunks):
         raise RuntimeError("chroma down")
 
-    monkeypatch.setattr(
-        document_processing_service.vector_store_service, "add_chunks", _boom
-    )
+    monkeypatch.setattr(document_processing_service.vector_store_service, "add_chunks", _boom)
     document = _create_finished_document(db_session, tmp_path, "失败文档", "# 第一章\n\n正文\n")
 
     process_document_record(db_session, document.id)

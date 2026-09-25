@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 from app.services.document_parser import (
     ParsedDocument,
     ParsedSection,
@@ -13,6 +12,7 @@ from app.services.document_parser import (
     parse_document_structure,
     parse_document_text,
 )
+from pydantic import ValidationError
 
 
 def test_normalize_text_trims_lines_and_collapses_blank_lines() -> None:
@@ -74,11 +74,19 @@ def test_parsed_section_rejects_level_zero() -> None:
 
 
 def test_markdown_structure_parses_nested_headings() -> None:
-    text = "# 第一章\n\n导读\n\n## 1.1 背景\n\n背景正文\n\n### 细节\n\n细则\n\n## 1.2 方法\n\n方法正文\n"
+    text = (
+        "# 第一章\n\n导读\n\n## 1.1 背景\n\n背景正文\n\n"
+        "### 细节\n\n细则\n\n## 1.2 方法\n\n方法正文\n"
+    )
 
     parsed = _parse_markdown_structure(text)
 
-    assert [section.title for section in parsed.sections] == ["第一章", "1.1 背景", "细节", "1.2 方法"]
+    assert [section.title for section in parsed.sections] == [
+        "第一章",
+        "1.1 背景",
+        "细节",
+        "1.2 方法",
+    ]
     assert [section.level for section in parsed.sections] == [1, 2, 3, 2]
     assert [section.parent_order for section in parsed.sections] == [None, 0, 1, 0]
     assert parsed.sections[0].content == "导读"
@@ -192,7 +200,10 @@ def test_docx_structure_rejects_bold_non_headings(tmp_path: Path) -> None:
     path = tmp_path / "bold-noise.docx"
     document = DocxDocument()
     long_bold = document.add_paragraph()
-    long_run = long_bold.add_run("这是一段很长的加粗文字它的长度明显超过四十个字符因此不应该被识别为标题而应该被当作普通正文处理才对")
+    long_run = long_bold.add_run(
+        "这是一段很长的加粗文字它的长度明显超过四十个字符"
+        "因此不应该被识别为标题而应该被当作普通正文处理才对"
+    )
     long_run.bold = True
     plain = document.add_paragraph()
     plain_run = plain.add_run("未加粗的大字号文字")

@@ -13,9 +13,7 @@ from sqlalchemy.orm import Session
 
 
 def _create_kb(client: TestClient, name: str = "TreeKB") -> dict[str, Any]:
-    response = client.post(
-        "/api/kbs", json={"name": name, "description": "", "category": "大数据"}
-    )
+    response = client.post("/api/kbs", json={"name": name, "description": "", "category": "大数据"})
     assert response.status_code == 201
     return response.json()
 
@@ -53,9 +51,7 @@ def test_sections_endpoint_returns_nested_tree(
 ) -> None:
     kb = _create_kb(client)
     _enable_sync_processing(client, db_session, monkeypatch, tmp_path)
-    uploaded = _upload_md(
-        client, kb["id"], "tree.md", "# 第一章\n\n导读\n\n## 1.1 背景\n\n正文\n"
-    )
+    uploaded = _upload_md(client, kb["id"], "tree.md", "# 第一章\n\n导读\n\n## 1.1 背景\n\n正文\n")
 
     response = client.get(f"/api/documents/{uploaded['id']}/sections")
 
@@ -124,12 +120,8 @@ def test_rebuild_reparses_finished_documents(
     _enable_sync_processing(client, db_session, monkeypatch, tmp_path)
     uploaded = _upload_md(client, kb["id"], "rebuild.md", "# 第一章\n\n正文\n")
     document_id = uploaded["id"]
-    db_session.query(DocumentSection).filter(
-        DocumentSection.document_id == document_id
-    ).delete()
-    db_session.query(DocumentChunk).filter(
-        DocumentChunk.document_id == document_id
-    ).delete()
+    db_session.query(DocumentSection).filter(DocumentSection.document_id == document_id).delete()
+    db_session.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
     db_session.commit()
 
     response = client.post(f"/api/kbs/{kb['id']}/rebuild-index")
@@ -162,9 +154,7 @@ def test_rebuild_keeps_chunks_when_source_file_missing(
     assert response.status_code == 200
     assert response.json()["indexed_chunks"] == 1
     assert (
-        db_session.scalar(
-            select(DocumentChunk.id).where(DocumentChunk.document_id == document_id)
-        )
+        db_session.scalar(select(DocumentChunk.id).where(DocumentChunk.document_id == document_id))
         is not None
     )
 
@@ -205,9 +195,7 @@ def test_chat_sources_carry_section_path(
     assert source["document_title"] == "已删除资料"
 
 
-def test_vector_search_results_carry_section_path(
-    client: TestClient, monkeypatch
-) -> None:
+def test_vector_search_results_carry_section_path(client: TestClient, monkeypatch) -> None:
     from app.services import vector_store_service as vector_store_module
 
     kb = _create_kb(client, "SearchKB")

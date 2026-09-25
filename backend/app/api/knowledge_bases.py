@@ -111,9 +111,7 @@ def delete_knowledge_base(
     db.query(Conversation).filter(Conversation.kb_id == kb_id).delete()
     db.query(DocumentChunk).filter(DocumentChunk.kb_id == kb_id).delete()
     db.query(DocumentSection).filter(
-        DocumentSection.document_id.in_(
-            select(Document.id).where(Document.kb_id == kb_id)
-        )
+        DocumentSection.document_id.in_(select(Document.id).where(Document.kb_id == kb_id))
     ).delete(synchronize_session=False)
     db.query(Document).filter(Document.kb_id == kb_id).delete()
     db.delete(knowledge_base)
@@ -160,9 +158,7 @@ def rebuild_knowledge_base_index(
             else:
                 stale = list(
                     db.scalars(
-                        select(DocumentChunk).where(
-                            DocumentChunk.document_id == document.id
-                        )
+                        select(DocumentChunk).where(DocumentChunk.document_id == document.id)
                     )
                 )
                 vector_store_service.delete_chunks([chunk.id for chunk in stale])

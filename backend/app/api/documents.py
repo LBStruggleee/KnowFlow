@@ -296,9 +296,7 @@ def _build_section_forest(sections: list[DocumentSection]) -> list[DocumentSecti
     for section in sections:
         node = nodes[section.id]
         parent = (
-            nodes.get(section.parent_section_id)
-            if section.parent_section_id is not None
-            else None
+            nodes.get(section.parent_section_id) if section.parent_section_id is not None else None
         )
         if parent is None:
             roots.append(node)

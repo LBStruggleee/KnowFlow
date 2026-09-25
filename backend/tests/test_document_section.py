@@ -46,9 +46,7 @@ def test_section_tree_persists_with_parent_links(db_session: Session) -> None:
     db_session.add(child)
     db_session.commit()
 
-    rows = db_session.scalars(
-        select(DocumentSection).order_by(DocumentSection.section_order)
-    ).all()
+    rows = db_session.scalars(select(DocumentSection).order_by(DocumentSection.section_order)).all()
     assert [row.title for row in rows] == ["大数据导论", "第一章"]
     assert rows[1].parent_section_id == rows[0].id
 
