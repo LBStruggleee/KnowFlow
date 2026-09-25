@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.models.conversation import ChatMessage, Conversation
 from app.models.document import Document
 from app.services import document_processing_service
+from app.services.document_parser import ParsedDocument, ParsedSection
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -177,8 +178,18 @@ def test_failed_document_can_be_retried(
 
     monkeypatch.setattr(
         document_processing_service,
-        "parse_document_text",
-        lambda _path: "重试后成功解析的内容",
+        "parse_document_structure",
+        lambda _path: ParsedDocument(
+            sections=[
+                ParsedSection(
+                    title="正文",
+                    level=1,
+                    order=0,
+                    parent_order=None,
+                    content="重试后成功解析的内容",
+                )
+            ]
+        ),
     )
     retry = client.post(f"/api/documents/{document_id}/retry")
     assert retry.status_code == 202
