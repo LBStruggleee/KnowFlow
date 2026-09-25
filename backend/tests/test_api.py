@@ -119,7 +119,7 @@ def test_upload_returns_processing_then_background_task_finishes(
     monkeypatch.setattr(
         document_processing_service.vector_store_service,
         "add_chunks",
-        lambda _chunks: None,
+        lambda _chunks, _paths=None: None,
     )
     monkeypatch.setattr(
         documents_api,
@@ -154,7 +154,7 @@ def test_failed_document_can_be_retried(
     monkeypatch.setattr(
         document_processing_service.vector_store_service,
         "add_chunks",
-        lambda _chunks: None,
+        lambda _chunks, _paths=None: None,
     )
     monkeypatch.setattr(
         document_processing_service.vector_store_service,

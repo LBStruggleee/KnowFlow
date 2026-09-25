@@ -34,7 +34,11 @@ class VectorStoreService:
     def embedding_provider(self) -> str:
         return embedding_service.index_name
 
-    def add_chunks(self, chunks: list[DocumentChunk]) -> None:
+    def add_chunks(
+        self,
+        chunks: list[DocumentChunk],
+        section_paths: dict[int, str] | None = None,
+    ) -> None:
         if not chunks:
             return
 
@@ -42,12 +46,14 @@ class VectorStoreService:
         embeddings = embedding_service.embed_texts(documents)
         collection = self.collection
         ids = [_chunk_vector_id(chunk.id) for chunk in chunks]
+        paths = section_paths or {}
         metadatas = [
             {
                 "chunk_id": chunk.id,
                 "document_id": chunk.document_id,
                 "kb_id": chunk.kb_id,
                 "chunk_index": chunk.chunk_index,
+                "section_path": paths.get(chunk.id, ""),
             }
             for chunk in chunks
         ]
@@ -107,6 +113,7 @@ class VectorStoreService:
                     "chunk_index": int(metadata["chunk_index"]),
                     "content": document,
                     "score": max(0.0, 1.0 - float(distance)),
+                    "section_path": str(metadata.get("section_path") or ""),
                 }
             )
         return matches

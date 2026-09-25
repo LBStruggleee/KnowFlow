@@ -38,7 +38,7 @@ def test_process_builds_section_tree_and_chunk_links(
     db_session: Session, monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(
-        document_processing_service.vector_store_service, "add_chunks", lambda _chunks: None
+        document_processing_service.vector_store_service, "add_chunks", lambda _chunks, _paths=None: None
     )
     document = _create_finished_document(
         db_session, tmp_path, "大数据导论", "卷首语\n\n# 第一章\n\n章导读\n\n## 1.1 背景\n\n背景正文\n"

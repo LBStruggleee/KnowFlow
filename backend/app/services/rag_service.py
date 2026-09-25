@@ -150,6 +150,7 @@ def _build_context(sources: list[dict[str, Any]]) -> str:
                     f"document_id: {source['document_id']}",
                     f"chunk_index: {source['chunk_index']}",
                     f"score: {source['score']:.4f}",
+                    f"section_path: {source.get('section_path', '')}",
                     "content:",
                     source["content"],
                 ]

@@ -91,6 +91,7 @@ def process_document_record(db: Session, document_id: int) -> None:
 
         root_title = document.title or Path(document.file_path).stem
         owners = _persist_section_tree(db, document, root_title, parsed)
+        chunk_owners: list[tuple[DocumentChunk, DocumentSection]] = []
         chunk_index = 0
         for result in split_text_structured(parsed.sections, root_content=parsed.lead_content):
             owner = owners.get(result.section_order, owners[-1])
@@ -104,11 +105,13 @@ def process_document_record(db: Session, document_id: int) -> None:
             )
             db.add(document_chunk)
             document_chunks.append(document_chunk)
+            chunk_owners.append((document_chunk, owner))
             owner.chunk_count += 1
             chunk_index += 1
 
         db.flush()
-        vector_store_service.add_chunks(document_chunks)
+        section_paths = {chunk.id: owner.section_path for chunk, owner in chunk_owners}
+        vector_store_service.add_chunks(document_chunks, section_paths)
 
         document.status = "finished"
         document.content_length = sum(len(chunk.content) for chunk in document_chunks)
