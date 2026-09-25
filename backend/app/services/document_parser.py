@@ -2,6 +2,7 @@ from pathlib import Path
 
 from docx import Document
 from pptx import Presentation
+from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
 SUPPORTED_FILE_TYPES = {".txt", ".md", ".pdf", ".docx", ".pptx"}
@@ -89,3 +90,44 @@ def _parse_pptx(file_path: Path) -> str:
             parts.append(f"Slide {slide_index}\n" + "\n".join(slide_parts))
 
     return "\n\n".join(parts)
+
+
+class ParsedSection(BaseModel):
+    title: str
+    level: int = Field(ge=1, le=9)
+    order: int = Field(ge=0)
+    parent_order: int | None = None
+    content: str = ""
+
+
+class ParsedTable(BaseModel):
+    headers: list[str] = []
+    rows: list[list[str]] = []
+    source_section_order: int = -1
+
+
+class ParsedDocument(BaseModel):
+    sections: list[ParsedSection] = []
+    tables: list[ParsedTable] = []
+    lead_content: str = ""
+
+
+def assign_parent_orders(items: list[tuple[str, int, str]]) -> list[ParsedSection]:
+    """Fill order/parent_order for (title, level, content) triples in document order."""
+    sections: list[ParsedSection] = []
+    stack: list[tuple[int, int]] = []
+    for order, (title, level, content) in enumerate(items):
+        while stack and stack[-1][0] >= level:
+            stack.pop()
+        parent_order = stack[-1][1] if stack else None
+        sections.append(
+            ParsedSection(
+                title=title,
+                level=level,
+                order=order,
+                parent_order=parent_order,
+                content=content,
+            )
+        )
+        stack.append((level, order))
+    return sections
