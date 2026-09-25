@@ -7,9 +7,11 @@ from app.core.database import BASE_DIR, get_db
 from app.core.db_utils import safe_commit
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.models.document_section import DocumentSection
 from app.models.knowledge_base import KnowledgeBase
 from app.schemas.document import DocumentRead
 from app.schemas.document_chunk import DocumentChunkRead
+from app.schemas.document_section import DocumentSectionTree
 from app.services.document_parser import SUPPORTED_FILE_TYPES
 from app.services.document_processing_service import (
     process_document,
@@ -203,6 +205,7 @@ def delete_document(
         db.scalars(select(DocumentChunk.id).where(DocumentChunk.document_id == document_id))
     )
     db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
+    db.query(DocumentSection).filter(DocumentSection.document_id == document_id).delete()
     file_path = Path(document.file_path)
     db.delete(document)
     safe_commit(db)
@@ -221,7 +224,7 @@ def delete_document(
 def list_document_chunks(
     document_id: int,
     db: Session = Depends(get_db),
-) -> list[DocumentChunk]:
+) -> list[DocumentChunkRead]:
     document = db.get(Document, document_id)
     if document is None:
         raise HTTPException(
@@ -229,13 +232,79 @@ def list_document_chunks(
             detail="Document not found.",
         )
 
-    return list(
+    chunks = list(
         db.scalars(
             select(DocumentChunk)
             .where(DocumentChunk.document_id == document_id)
             .order_by(DocumentChunk.chunk_index.asc())
         )
     )
+    section_ids = {chunk.section_id for chunk in chunks if chunk.section_id is not None}
+    paths: dict[int, str] = {}
+    if section_ids:
+        paths = dict(
+            db.execute(
+                select(DocumentSection.id, DocumentSection.section_path).where(
+                    DocumentSection.id.in_(section_ids)
+                )
+            ).all()
+        )
+    return [
+        DocumentChunkRead(
+            id=chunk.id,
+            kb_id=chunk.kb_id,
+            document_id=chunk.document_id,
+            chunk_index=chunk.chunk_index,
+            content=chunk.content,
+            token_count=chunk.token_count,
+            created_at=chunk.created_at,
+            section_id=chunk.section_id,
+            section_path=paths.get(chunk.section_id, "") if chunk.section_id else "",
+        )
+        for chunk in chunks
+    ]
+
+
+@router.get(
+    "/documents/{document_id}/sections",
+    response_model=list[DocumentSectionTree],
+)
+def list_document_sections(
+    document_id: int,
+    db: Session = Depends(get_db),
+) -> list[DocumentSectionTree]:
+    document = db.get(Document, document_id)
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found.",
+        )
+
+    sections = list(
+        db.scalars(
+            select(DocumentSection)
+            .where(DocumentSection.document_id == document_id)
+            .order_by(DocumentSection.section_order.asc())
+        )
+    )
+    return _build_section_forest(sections)
+
+
+def _build_section_forest(sections: list[DocumentSection]) -> list[DocumentSectionTree]:
+    nodes = {section.id: DocumentSectionTree.model_validate(section) for section in sections}
+    roots: list[DocumentSectionTree] = []
+    for section in sections:
+        node = nodes[section.id]
+        parent = (
+            nodes.get(section.parent_section_id)
+            if section.parent_section_id is not None
+            else None
+        )
+        if parent is None:
+            roots.append(node)
+        else:
+            parent.children.append(node)
+    return roots
 
 
 def _document_read(

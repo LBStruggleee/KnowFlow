@@ -214,7 +214,7 @@ GitHub Actions 会在 push 和 pull request 时执行同类检查。当前验证
 | `GET/POST/DELETE` | `/api/conversations` | 会话列表、详情和删除 |
 | `GET/PATCH` | `/api/admin/settings` | 检索和生成参数 |
 | `GET` | `/api/admin/status` | 系统统计与 token 用量 |
-| `POST` | `/api/kbs/{kb_id}/rebuild-index` | 从 SQLite chunk 重建 Chroma 索引 |
+| `POST` | `/api/kbs/{kb_id}/rebuild-index` | 重新解析 finished 文档并重建 section 与 Chroma 索引（源文件缺失则仅重嵌） |
 
 问答示例：
 

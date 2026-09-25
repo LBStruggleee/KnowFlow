@@ -13,3 +13,5 @@ class DocumentChunkRead(BaseModel):
     content: str
     token_count: int
     created_at: datetime
+    section_id: int | None = None
+    section_path: str = ""

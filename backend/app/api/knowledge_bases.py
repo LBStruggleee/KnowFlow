@@ -7,6 +7,7 @@ from app.core.db_utils import commit_or_conflict, safe_commit
 from app.models.conversation import ChatMessage, Conversation
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.models.document_section import DocumentSection
 from app.models.knowledge_base import KnowledgeBase
 from app.models.learning_record import LearningRecord
 from app.schemas.knowledge_base import (
@@ -15,9 +16,13 @@ from app.schemas.knowledge_base import (
     KnowledgeBaseRead,
     KnowledgeBaseUpdate,
 )
+from app.services.document_processing_service import (
+    process_document_record,
+    reset_document_for_retry,
+)
 from app.services.vector_store_service import vector_store_service
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/kbs", tags=["knowledge bases"])
@@ -105,6 +110,11 @@ def delete_knowledge_base(
     db.query(LearningRecord).filter(LearningRecord.kb_id == kb_id).delete()
     db.query(Conversation).filter(Conversation.kb_id == kb_id).delete()
     db.query(DocumentChunk).filter(DocumentChunk.kb_id == kb_id).delete()
+    db.query(DocumentSection).filter(
+        DocumentSection.document_id.in_(
+            select(Document.id).where(Document.kb_id == kb_id)
+        )
+    ).delete(synchronize_session=False)
     db.query(Document).filter(Document.kb_id == kb_id).delete()
     db.delete(knowledge_base)
     safe_commit(db)
@@ -124,14 +134,40 @@ def rebuild_knowledge_base_index(
     db: Session = Depends(get_db),
 ) -> IndexRebuildRead:
     _get_knowledge_base_or_404(db, kb_id)
-    chunks = list(
+    documents = list(
         db.scalars(
-            select(DocumentChunk).where(DocumentChunk.kb_id == kb_id).order_by(DocumentChunk.id)
+            select(Document)
+            .where(Document.kb_id == kb_id, Document.status == "finished")
+            .order_by(Document.id)
         )
     )
     try:
-        vector_store_service.delete_knowledge_base(kb_id)
-        vector_store_service.add_chunks(chunks)
+        indexed_chunks = 0
+        for document in documents:
+            if Path(document.file_path).is_file():
+                reset_document_for_retry(db, document)
+                process_document_record(db, document.id)
+                finished = db.get(Document, document.id)
+                if finished is not None and finished.status == "finished":
+                    indexed_chunks += (
+                        db.scalar(
+                            select(func.count(DocumentChunk.id)).where(
+                                DocumentChunk.document_id == document.id
+                            )
+                        )
+                        or 0
+                    )
+            else:
+                stale = list(
+                    db.scalars(
+                        select(DocumentChunk).where(
+                            DocumentChunk.document_id == document.id
+                        )
+                    )
+                )
+                vector_store_service.delete_chunks([chunk.id for chunk in stale])
+                vector_store_service.add_chunks(stale, _chunk_section_paths(db, stale))
+                indexed_chunks += len(stale)
     except HTTPException:
         raise
     except Exception as exc:
@@ -142,10 +178,28 @@ def rebuild_knowledge_base_index(
         ) from exc
     return IndexRebuildRead(
         kb_id=kb_id,
-        indexed_chunks=len(chunks),
+        indexed_chunks=indexed_chunks,
         collection=vector_store_service.collection_name,
         embedding_provider=vector_store_service.embedding_provider,
     )
+
+
+def _chunk_section_paths(db: Session, chunks: list[DocumentChunk]) -> dict[int, str]:
+    section_ids = {chunk.section_id for chunk in chunks if chunk.section_id is not None}
+    if not section_ids:
+        return {}
+    by_section = dict(
+        db.execute(
+            select(DocumentSection.id, DocumentSection.section_path).where(
+                DocumentSection.id.in_(section_ids)
+            )
+        ).all()
+    )
+    return {
+        chunk.id: by_section.get(chunk.section_id, "")
+        for chunk in chunks
+        if chunk.id is not None and chunk.section_id is not None
+    }
 
 
 def _get_knowledge_base_or_404(db: Session, kb_id: int) -> KnowledgeBase:
