@@ -203,6 +203,14 @@ def test_search_lexical_matches_section_path_terms(db_session: Session) -> None:
     assert len(hits) == 3
 
 
+def test_search_lexical_uses_or_semantics_for_multi_term_queries(db_session: Session) -> None:
+    kb_id = _create_kb_chunks(db_session)
+
+    hits, _ = search_lexical(db_session, kb_id, "NameNode是什么", top_k=5)
+
+    assert [hit["content"] for hit in hits] == ["NameNode 是主节点"]
+
+
 def test_search_lexical_returns_empty_for_blank_terms(db_session: Session) -> None:
     kb_id = _create_kb_chunks(db_session)
 

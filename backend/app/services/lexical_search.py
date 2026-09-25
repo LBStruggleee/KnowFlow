@@ -163,9 +163,12 @@ def search_lexical(
     if not terms:
         return [], {"returned": 0, "best": 0.0, "fallback": None}
     limit = max(top_k * 2, 10)
+    # OR semantics: bigram queries rarely share every pair with a hit
+    # (e.g. question 是什么 vs document 是主节点); bm25 ranks, RRF fuses.
+    match_query = " OR ".join(terms.split())
     try:
         rows = (
-            db.execute(text(FTS_SEARCH_SQL), {"terms": terms, "kb_id": kb_id, "limit": limit})
+            db.execute(text(FTS_SEARCH_SQL), {"terms": match_query, "kb_id": kb_id, "limit": limit})
             .mappings()
             .all()
         )

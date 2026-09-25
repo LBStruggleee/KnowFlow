@@ -220,3 +220,56 @@ def test_vector_search_results_carry_section_path(client: TestClient, monkeypatc
     assert response.status_code == 200
     (result,) = response.json()["results"]
     assert result["section_path"] == "chat / 第一章"
+
+
+def _upload_term_doc(client: TestClient, db_session, monkeypatch, tmp_path: Path, kb_id: int) -> None:
+    from app.api import documents as documents_api
+    from app.services import document_processing_service
+
+    monkeypatch.setattr(documents_api, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(
+        document_processing_service.vector_store_service, "add_chunks", lambda *args: None
+    )
+    monkeypatch.setattr(
+        documents_api,
+        "process_document",
+        lambda document_id: document_processing_service.process_document_record(
+            db_session, document_id
+        ),
+    )
+    response = client.post(
+        f"/api/kbs/{kb_id}/documents/upload",
+        files={"file": ("term.md", "# 指南\n\nNameNode 是主节点\n", "text/markdown")},
+    )
+    assert response.status_code == 202
+
+
+def test_chat_lexical_channel_hits_term(
+    client: TestClient, db_session: Session, monkeypatch, tmp_path: Path
+) -> None:
+    kb = _create_kb(client, "LexicalChatKB")
+    _upload_term_doc(client, db_session, monkeypatch, tmp_path, kb["id"])
+    assert client.patch("/api/admin/settings", json={"retrieval_channels": "lexical"}).status_code == 200
+
+    response = client.post("/api/chat", json={"kb_id": kb["id"], "question": "NameNode是什么"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sources"], "lexical channel should hit the term document"
+    assert body["retrieval_trace"]["channels"]["mode"] == "lexical"
+    assert body["retrieval_trace"]["channels"]["lexical"]["returned"] >= 1
+    client.patch("/api/admin/settings", json={"retrieval_channels": "hybrid"})
+
+
+def test_vector_search_uses_hybrid_by_default(
+    client: TestClient, db_session: Session, monkeypatch, tmp_path: Path
+) -> None:
+    kb = _create_kb(client, "HybridSearchKB")
+    _upload_term_doc(client, db_session, monkeypatch, tmp_path, kb["id"])
+
+    response = client.post(f"/api/kbs/{kb['id']}/search", json={"query": "NameNode"})
+
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert results, "hybrid search should hit the term document"
+    assert results[0]["section_path"] == "term / 指南"

@@ -45,6 +45,8 @@ def chat(
             history=history_messages,
             mode=payload.mode,
             privacy_mode=str(config["privacy_mode"]),
+            db=db,
+            channels=str(config["retrieval_channels"]),
         )
     except Exception:
         db.rollback()

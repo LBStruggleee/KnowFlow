@@ -1,7 +1,8 @@
 from app.core.database import get_db
 from app.models.knowledge_base import KnowledgeBase
 from app.schemas.vector_search import VectorSearchRequest, VectorSearchResponse
-from app.services.vector_store_service import vector_store_service
+from app.services.hybrid_search import search_hybrid
+from app.services.settings_service import typed_settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -21,9 +22,12 @@ def search_knowledge_base(
             detail="Knowledge base not found.",
         )
 
-    results = vector_store_service.search(
+    config = typed_settings(db)
+    hybrid = search_hybrid(
+        db,
         kb_id=kb_id,
         query=payload.query,
         top_k=payload.top_k,
+        channels=str(config["retrieval_channels"]),
     )
-    return VectorSearchResponse(query=payload.query, results=results)
+    return VectorSearchResponse(query=payload.query, results=hybrid.hits)

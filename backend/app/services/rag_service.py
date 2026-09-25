@@ -1,7 +1,9 @@
 from typing import Any
 
+from sqlalchemy.orm import Session
+
+from app.services.hybrid_search import search_hybrid
 from app.services.llm_service import llm_service
-from app.services.vector_store_service import vector_store_service
 from fastapi import HTTPException
 
 SYSTEM_PROMPT = """你是 KnowFlow（知汇）中的大数据课程学习助手。
@@ -34,14 +36,16 @@ class RagService:
         history: list[dict[str, str]] | None = None,
         mode: str = "question",
         privacy_mode: str = "hybrid",
+        db: Session | None = None,
+        channels: str = "hybrid",
     ) -> dict[str, Any]:
         retrieval_query = _build_retrieval_query(question, history or [])
-        sources = vector_store_service.search(
-            kb_id=kb_id,
-            query=retrieval_query,
-            top_k=top_k,
+        hybrid = search_hybrid(
+            db, kb_id=kb_id, query=retrieval_query, top_k=top_k, channels=channels
         )
+        sources = hybrid.hits
         retrieval_trace = _build_retrieval_trace(sources, top_k, score_threshold)
+        retrieval_trace["channels"] = hybrid.trace
         if not sources:
             return _no_evidence_result([], retrieval_trace)
 
