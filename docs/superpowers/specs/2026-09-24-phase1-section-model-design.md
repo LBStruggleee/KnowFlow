@@ -60,7 +60,9 @@ class DocumentSection(Base):
 
 - 每个文档恒有一个合成 Root section：`level=0`，`parent=None`，`title` = 文档标题（文件名词干），`section_path` = 文档标题本身。
 - 首个标题之前的正文（摘要、前言）归属 Root；无标题文档（txt / PDF）退化为「Root + 全部正文」。
-- 一个 section 拥有其直属标题下、子标题之前的正文切出的全部 chunk；只有子标题、无直属正文的 section `chunk_count = 0`（合法，不报错）。
+- 一个 section 拥有其直属标题下、子标题之前的正文切出的全部 chunk；直属正文为空的 section
+  回退用标题原文切块（保证纯标题文档仍可被检索，与 V1"标题是正文"行为一致），因此正常解析下
+  每个 section 至少产出 1 个 chunk；`chunk_count = 0` 只出现在异常数据防御路径。
 - 每个 chunk 必属一个 section，无孤儿 chunk。
 
 ---
@@ -88,6 +90,7 @@ class ParsedTable(BaseModel):  # P1 只定义类型，解析器返回空列表�
 class ParsedDocument(BaseModel):
     sections: list[ParsedSection]
     tables: list[ParsedTable] = []
+    lead_content: str = ""  # 首标题前正文；无标题文档则为全文；落盘层归属 Root
 
 def parse_document_structure(file_path: Path) -> ParsedDocument: ...
 ```
