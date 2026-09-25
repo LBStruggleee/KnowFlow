@@ -282,3 +282,40 @@ def _parse_docx_structure(file_path: Path) -> ParsedDocument:
         sections=assign_parent_orders(items),
         lead_content=normalize_text("\n\n".join(lead_lines)),
     )
+
+
+def _parse_pptx_structure(file_path: Path) -> ParsedDocument:
+    presentation = Presentation(str(file_path))
+    items: list[tuple[str, int, str]] = []
+    for slide_index, slide in enumerate(presentation.slides, start=1):
+        title_shape = slide.shapes.title
+        title_text = title_shape.text.strip() if title_shape is not None else ""
+        title = title_text or f"Slide {slide_index}"
+        parts: list[str] = []
+        for shape in slide.shapes:
+            if getattr(shape, "has_text_frame", False):
+                text = shape.text.strip()
+                if text:
+                    parts.append(text)
+            if getattr(shape, "has_table", False):
+                for row in shape.table.rows:
+                    cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                    if cells:
+                        parts.append(" | ".join(cells))
+        items.append((title, 1, normalize_text("\n".join(parts))))
+    return ParsedDocument(sections=assign_parent_orders(items))
+
+
+def parse_document_structure(file_path: Path) -> ParsedDocument:
+    suffix = file_path.suffix.lower()
+    if suffix not in SUPPORTED_FILE_TYPES:
+        supported = ", ".join(sorted(SUPPORTED_FILE_TYPES))
+        raise ValueError(f"Unsupported file type: {suffix}. Supported: {supported}")
+
+    if suffix == ".md":
+        return _parse_markdown_structure(file_path.read_text(encoding="utf-8"))
+    if suffix == ".docx":
+        return _parse_docx_structure(file_path)
+    if suffix == ".pptx":
+        return _parse_pptx_structure(file_path)
+    return ParsedDocument(lead_content=parse_document_text(file_path))

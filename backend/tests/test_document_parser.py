@@ -10,6 +10,7 @@ from app.services.document_parser import (
     assign_parent_orders,
     match_heading_style,
     normalize_text,
+    parse_document_structure,
     parse_document_text,
 )
 
@@ -207,3 +208,63 @@ def test_docx_structure_rejects_bold_non_headings(tmp_path: Path) -> None:
 
     assert parsed.sections == []
     assert "表格内的加粗说明" in parsed.lead_content
+
+
+def test_pptx_structure_creates_one_section_per_slide(tmp_path: Path) -> None:
+    from pptx import Presentation
+
+    path = tmp_path / "deck.pptx"
+    presentation = Presentation()
+    title_layout = presentation.slide_layouts[1]
+    first = presentation.slides.add_slide(title_layout)
+    first.shapes.title.text = "课程目标"
+    first.placeholders[1].text = "掌握 RAG 原理"
+    second = presentation.slides.add_slide(title_layout)
+    second.placeholders[1].text = "只有正文没有标题"
+    presentation.save(path)
+
+    parsed = parse_document_structure(path)
+
+    assert [(section.title, section.level) for section in parsed.sections] == [
+        ("课程目标", 1),
+        ("Slide 2", 1),
+    ]
+    assert parsed.sections[0].content == "课程目标\n掌握 RAG 原理"
+    assert parsed.lead_content == ""
+
+
+def test_parse_structure_dispatches_markdown(tmp_path: Path) -> None:
+    document = tmp_path / "note.md"
+    document.write_text("# 第一章\n\n正文\n", encoding="utf-8")
+
+    parsed = parse_document_structure(document)
+
+    assert [section.title for section in parsed.sections] == ["第一章"]
+
+
+def test_parse_structure_falls_back_to_single_root(tmp_path: Path) -> None:
+    from pypdf import PdfWriter
+
+    text_file = tmp_path / "plain.txt"
+    text_file.write_text("第一段\n\n第二段", encoding="utf-8")
+    pdf_file = tmp_path / "blank.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    with pdf_file.open("wb") as handle:
+        writer.write(handle)
+
+    text_parsed = parse_document_structure(text_file)
+    pdf_parsed = parse_document_structure(pdf_file)
+
+    assert text_parsed.sections == []
+    assert text_parsed.lead_content == "第一段\n\n第二段"
+    assert pdf_parsed.sections == []
+    assert pdf_parsed.lead_content == ""
+
+
+def test_parse_structure_rejects_unsupported_extension(tmp_path: Path) -> None:
+    document = tmp_path / "sample.csv"
+    document.write_text("value", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Unsupported file type"):
+        parse_document_structure(document)
