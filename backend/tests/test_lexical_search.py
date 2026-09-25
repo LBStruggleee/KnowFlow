@@ -127,6 +127,24 @@ def test_ensure_lexical_index_is_idempotent(db_session: Session) -> None:
     assert tables != []
 
 
+def test_ensure_skips_repopulate_when_index_exists(db_session: Session) -> None:
+    # Trade-off pin: re-running ensure must NOT wipe + rebuild a live index
+    # (per-boot O(table) writes). Manual drift is out of scope.
+    chunk = _create_chunk(db_session, "混合检索提升召回", _build_search_text("混合检索提升召回"))
+    db_session.execute(
+        text("INSERT INTO chunk_fts(chunk_fts, rowid, text) VALUES ('delete', :id, :text)"),
+        {"id": chunk.id, "text": chunk.search_text},
+    )
+    db_session.commit()
+
+    ensure_lexical_index(db_session.get_bind())
+
+    assert (
+        db_session.execute(text("SELECT rowid FROM chunk_fts WHERE chunk_fts MATCH '混合'")).all()
+        == []
+    )
+
+
 def test_fts5_available_on_supported_sqlite(db_session: Session) -> None:
     assert fts5_available(db_session.get_bind()) is True
 

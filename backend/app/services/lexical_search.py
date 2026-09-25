@@ -79,13 +79,22 @@ def ensure_lexical_index(engine: Engine) -> bool:
         logger.warning("SQLite FTS5 is unavailable; lexical channel will use LIKE fallback.")
         return False
     with engine.begin() as connection:
+        # COUNT(*) does not work on external-content FTS tables ("no such column"),
+        # so freshness is decided by table pre-existence, a reliable primitive.
+        existed = (
+            connection.exec_driver_sql(
+                "SELECT 1 FROM sqlite_master WHERE name='chunk_fts'"
+            ).fetchone()
+            is not None
+        )
         connection.exec_driver_sql(FTS_TABLE_DDL)
         for trigger_ddl in FTS_TRIGGER_DDLS:
             connection.exec_driver_sql(trigger_ddl)
-        # SQLite < 3.46 quirk: a 'delete' command against a never-written FTS5
+        if existed:
+            return True
+        # SQLite quirk: a 'delete' command against a never-written FTS5
         # external-content index raises "database disk image is malformed".
-        # delete-all + populate keeps the index initialized (idempotent,
-        # self-healing) so trigger delete commands always land on live segments.
+        # delete-all + populate keeps a fresh index initialized (idempotent).
         # Zero-row tables stay virgin, but no delete can fire without a prior
         # insert trigger, which itself initializes the index.
         connection.exec_driver_sql("INSERT INTO chunk_fts(chunk_fts) VALUES('delete-all')")

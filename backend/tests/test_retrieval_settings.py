@@ -33,3 +33,14 @@ def test_patch_invalid_channels_normalizes_to_hybrid(client: TestClient) -> None
 
     assert response.status_code == 200
     assert response.json()["retrieval_channels"] == "hybrid"
+
+
+def test_typed_settings_normalizes_hand_edited_value(db_session: Session) -> None:
+    from app.models.system_setting import SystemSetting
+
+    db_session.add(
+        SystemSetting(key="retrieval_channels", value="VECTOR", description="hand-edited")
+    )
+    db_session.commit()
+
+    assert typed_settings(db_session)["retrieval_channels"] == "vector"

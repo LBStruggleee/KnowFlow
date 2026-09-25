@@ -70,5 +70,5 @@ def typed_settings(db: Session) -> dict[str, object]:
         "temperature": float(values["temperature"]),
         "privacy_mode": values["privacy_mode"],
         "glass_variant": values["glass_variant"],
-        "retrieval_channels": str(values["retrieval_channels"]),
+        "retrieval_channels": normalize_retrieval_channels(values["retrieval_channels"]),
     }
