@@ -1,3 +1,7 @@
+from pydantic import BaseModel
+
+from app.services.document_parser import ParsedSection
+
 DEFAULT_CHUNK_SIZE = 800
 DEFAULT_CHUNK_OVERLAP = 150
 
@@ -75,3 +79,31 @@ def _overlap_tail(previous: str, chunk_overlap: int, next_paragraph: str) -> str
     if not tail:
         return next_paragraph
     return f"{tail}\n\n{next_paragraph}".strip()
+
+
+class ChunkResult(BaseModel):
+    content: str
+    section_order: int = -1
+    section_level: int = 0
+
+
+def split_text_structured(
+    sections: list[ParsedSection],
+    root_content: str = "",
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+) -> list[ChunkResult]:
+    results: list[ChunkResult] = []
+    for content in split_text(root_content, chunk_size=chunk_size, chunk_overlap=chunk_overlap):
+        results.append(ChunkResult(content=content, section_order=-1, section_level=0))
+    for section in sections:
+        body = section.content if section.content.strip() else section.title
+        for content in split_text(body, chunk_size=chunk_size, chunk_overlap=chunk_overlap):
+            results.append(
+                ChunkResult(
+                    content=content,
+                    section_order=section.order,
+                    section_level=section.level,
+                )
+            )
+    return results
