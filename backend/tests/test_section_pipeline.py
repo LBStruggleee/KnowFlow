@@ -107,9 +107,7 @@ def test_process_writes_bigram_search_text(
 
     process_document_record(db_session, document.id)
 
-    chunks = db_session.scalars(
-        select(DocumentChunk).order_by(DocumentChunk.chunk_index)
-    ).all()
+    chunks = db_session.scalars(select(DocumentChunk).order_by(DocumentChunk.chunk_index)).all()
     assert chunks[0].search_text == "背景 景正 正文 分词 第一 一章"
 
 
