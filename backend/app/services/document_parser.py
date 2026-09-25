@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from docx import Document
@@ -131,3 +132,70 @@ def assign_parent_orders(items: list[tuple[str, int, str]]) -> list[ParsedSectio
         )
         stack.append((level, order))
     return sections
+
+
+def _match_atx_heading(line: str) -> tuple[int, str]:
+    stripped = line.lstrip()
+    if not stripped.startswith("#"):
+        return 0, ""
+    hashes = len(stripped) - len(stripped.lstrip("#"))
+    rest = stripped[hashes:]
+    if not 1 <= hashes <= 6 or not rest or rest.startswith("#"):
+        return 0, ""
+    title = re.sub(r"\s+#+\s*$", "", rest.strip())
+    if not title:
+        return 0, ""
+    return hashes, title
+
+
+def _parse_markdown_structure(text: str) -> ParsedDocument:
+    items: list[tuple[str, int, str]] = []
+    lead_lines: list[str] = []
+    current: list[str] | None = None
+    current_title = ""
+    current_level = 0
+    in_fence = False
+    lines = text.split("\n")
+    index = 0
+
+    def target() -> list[str]:
+        return current if current is not None else lead_lines
+
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.strip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            target().append(line)
+            index += 1
+            continue
+        if not in_fence:
+            atx_level, atx_title = _match_atx_heading(line)
+            if atx_level:
+                if current is not None:
+                    items.append(
+                        (current_title, current_level, normalize_text("\n".join(current)))
+                    )
+                current, current_title, current_level = [], atx_title, atx_level
+                index += 1
+                continue
+            if stripped and index + 1 < len(lines):
+                underline = lines[index + 1].strip()
+                if re.fullmatch(r"=+", underline) or re.fullmatch(r"-+", underline):
+                    if current is not None:
+                        items.append(
+                            (current_title, current_level, normalize_text("\n".join(current)))
+                        )
+                    current, current_title = [], stripped
+                    current_level = 1 if underline.startswith("=") else 2
+                    index += 2
+                    continue
+        target().append(line)
+        index += 1
+
+    if current is not None:
+        items.append((current_title, current_level, normalize_text("\n".join(current))))
+    return ParsedDocument(
+        sections=assign_parent_orders(items),
+        lead_content=normalize_text("\n".join(lead_lines)),
+    )
