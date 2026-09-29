@@ -44,3 +44,6 @@ Thumbs.db
 # Generated artifacts
 generated/
 .superpowers/
+
+# Local agent instructions
+AGENTS.md
