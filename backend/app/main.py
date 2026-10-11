@@ -1,4 +1,5 @@
 import logging
+import sys
 
 from app.api.admin import router as admin_router
 from app.api.chat import router as chat_router
@@ -15,7 +16,7 @@ from app.services.lexical_search import (
     ensure_chunk_columns,
     ensure_lexical_index,
 )
-from app.services.startup_recovery import recover_interrupted_documents
+from app.services.startup_recovery import reconcile_orphan_vectors, recover_interrupted_documents
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -25,10 +26,16 @@ logging.basicConfig(
 )
 
 
+def _running_under_pytest() -> bool:
+    # Startup vector maintenance must not touch the developer's real
+    # Chroma storage merely because the test suite imports this module.
+    return "pytest" in sys.modules
+
+
 def create_app() -> FastAPI:
     application = FastAPI(
         title="KnowFlow API",
-        description="KnowFlow（知汇）面向大数据学习场景的 RAG 问答平台后端 API",
+        description="KnowFlow（知汇）——通用知识库 RAG 问答平台的后端 API",
         version="0.2.0",
     )
 
@@ -38,6 +45,8 @@ def create_app() -> FastAPI:
     with SessionLocal() as db:
         backfill_search_text(db)
         recover_interrupted_documents(db)
+        if not _running_under_pytest():
+            reconcile_orphan_vectors(db)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

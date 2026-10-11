@@ -19,10 +19,22 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 if DATABASE_URL.startswith("sqlite"):
 
     @event.listens_for(engine, "connect")
-    def _enable_sqlite_foreign_keys(dbapi_connection: object, _: object) -> None:
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+    def _configure_sqlite_connection(dbapi_connection: object, _: object) -> None:
+        configure_sqlite_connection(dbapi_connection)
+
+
+def configure_sqlite_connection(dbapi_connection: object) -> None:
+    """Apply the SQLite settings every app connection needs.
+
+    WAL lets concurrent readers work while a writer holds the database, and
+    busy_timeout keeps short write contention from failing with
+    "database is locked".
+    """
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
 
 
 class Base(DeclarativeBase):

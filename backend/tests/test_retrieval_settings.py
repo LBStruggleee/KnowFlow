@@ -44,3 +44,24 @@ def test_typed_settings_normalizes_hand_edited_value(db_session: Session) -> Non
     db_session.commit()
 
     assert typed_settings(db_session)["retrieval_channels"] == "vector"
+
+
+def test_patch_unknown_setting_key_returns_422(client: TestClient) -> None:
+    response = client.patch("/api/admin/settings", json={"unknown_key": "x"})
+
+    assert response.status_code == 422
+
+
+def test_typed_settings_falls_back_to_defaults_for_corrupted_values(db_session: Session) -> None:
+    from app.models.system_setting import SystemSetting
+
+    db_session.add(SystemSetting(key="top_k", value="abc", description="corrupted"))
+    db_session.add(SystemSetting(key="score_threshold", value="oops", description="corrupted"))
+    db_session.add(SystemSetting(key="temperature", value="hot", description="corrupted"))
+    db_session.commit()
+
+    values = typed_settings(db_session)
+
+    assert values["top_k"] == 5
+    assert values["score_threshold"] == 0.0
+    assert values["temperature"] == 0.2

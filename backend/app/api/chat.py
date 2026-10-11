@@ -1,11 +1,11 @@
 import json
+import logging
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.db_utils import safe_commit
+from app.core.db_utils import get_knowledge_base_or_404, safe_commit
 from app.models.conversation import ChatMessage, Conversation
 from app.models.document import Document
-from app.models.knowledge_base import KnowledgeBase
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.rag_service import rag_service
 from app.services.settings_service import typed_settings
@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api", tags=["chat"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -21,18 +22,26 @@ def chat(
     payload: ChatRequest,
     db: Session = Depends(get_db),
 ) -> ChatResponse:
-    knowledge_base = db.get(KnowledgeBase, payload.kb_id)
-    if knowledge_base is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Knowledge base not found.",
-        )
+    get_knowledge_base_or_404(db, payload.kb_id)
 
     config = typed_settings(db)
     top_k = payload.top_k if payload.top_k is not None else int(config["top_k"])
 
     conversation = _get_or_create_conversation(db, payload)
     history_messages = _load_history(db, conversation.id)
+
+    # Commit the conversation and the user message before invoking the LLM so
+    # the SQLite write lock is never held across the (possibly slow) upstream
+    # call and the turn survives an answer failure.
+    user_message = ChatMessage(
+        conversation_id=conversation.id,
+        kb_id=payload.kb_id,
+        role="user",
+        content=payload.question,
+    )
+    conversation.updated_at = func.now()
+    db.add(user_message)
+    safe_commit(db)
 
     try:
         result = rag_service.answer(
@@ -48,18 +57,17 @@ def chat(
             db=db,
             channels=str(config["retrieval_channels"]),
         )
-    except Exception:
-        db.rollback()
+    except HTTPException:
         raise
+    except Exception as exc:
+        logger.exception("Chat answer failed for conversation id=%s", conversation.id)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not answer the question.",
+        ) from exc
     usage = result.get("usage") or {}
     result["sources"] = _enrich_sources(db, result.get("sources", []))
 
-    user_message = ChatMessage(
-        conversation_id=conversation.id,
-        kb_id=payload.kb_id,
-        role="user",
-        content=payload.question,
-    )
     assistant_message = ChatMessage(
         conversation_id=conversation.id,
         kb_id=payload.kb_id,
@@ -71,7 +79,7 @@ def chat(
         total_tokens=int(usage.get("total_tokens") or 0),
     )
     conversation.updated_at = func.now()
-    db.add_all([user_message, assistant_message])
+    db.add(assistant_message)
     safe_commit(db)
     db.refresh(assistant_message)
 

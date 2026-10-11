@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SystemSettingsRead(BaseModel):
@@ -14,6 +14,9 @@ class SystemSettingsRead(BaseModel):
 
 
 class SystemSettingsUpdate(BaseModel):
+    # Unknown keys must fail validation (422) instead of being silently dropped.
+    model_config = ConfigDict(extra="forbid")
+
     top_k: int | None = Field(default=None, ge=1, le=20)
     score_threshold: float | None = Field(default=None, ge=0, le=1)
     qwen_model: str | None = Field(default=None, min_length=1, max_length=100)

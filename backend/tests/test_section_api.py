@@ -113,6 +113,106 @@ def test_delete_document_removes_sections(
     assert db_session.scalars(select(DocumentSection)).all() == []
 
 
+def test_rebuild_rejects_when_documents_are_processing(
+    client: TestClient, db_session: Session, monkeypatch, tmp_path: Path
+) -> None:
+    kb = _create_kb(client)
+    _enable_sync_processing(client, db_session, monkeypatch, tmp_path)
+    uploaded = _upload_md(client, kb["id"], "busy.md", "# 第一章\n\n正文\n")
+    document = db_session.get(Document, uploaded["id"])
+    document.status = "processing"
+    db_session.commit()
+
+    response = client.post(f"/api/kbs/{kb['id']}/rebuild-index")
+
+    assert response.status_code == 409
+
+
+def test_rebuild_rejects_concurrent_rebuild_for_same_kb(
+    client: TestClient, db_session: Session, monkeypatch, tmp_path: Path
+) -> None:
+    kb = _create_kb(client)
+    _enable_sync_processing(client, db_session, monkeypatch, tmp_path)
+    _upload_md(client, kb["id"], "guard.md", "# 第一章\n\n正文\n")
+    knowledge_bases_api._rebuilding_kbs.add(kb["id"])
+    try:
+        response = client.post(f"/api/kbs/{kb['id']}/rebuild-index")
+    finally:
+        knowledge_bases_api._rebuilding_kbs.clear()
+
+    assert response.status_code == 409
+
+
+def test_rebuild_guard_is_released_after_failure(
+    client: TestClient, db_session: Session, monkeypatch, tmp_path: Path
+) -> None:
+    kb = _create_kb(client)
+    _enable_sync_processing(client, db_session, monkeypatch, tmp_path)
+    _upload_md(client, kb["id"], "boom.md", "# 第一章\n\n正文\n")
+
+    def exploding_process(_db, _document_id):
+        raise RuntimeError("parse exploded")
+
+    monkeypatch.setattr(knowledge_bases_api, "process_document_record", exploding_process)
+
+    response = client.post(f"/api/kbs/{kb['id']}/rebuild-index")
+
+    assert response.status_code == 502
+    assert kb["id"] not in knowledge_bases_api._rebuilding_kbs
+
+
+def test_rebuild_compensates_vectors_after_failed_reindex(
+    client: TestClient, db_session: Session, monkeypatch, tmp_path: Path
+) -> None:
+    kb = _create_kb(client)
+    _enable_sync_processing(client, db_session, monkeypatch, tmp_path)
+    uploaded = _upload_md(client, kb["id"], "lost.md", "# 第一章\n\n正文\n")
+    document = db_session.get(Document, uploaded["id"])
+    Path(document.file_path).unlink()
+
+    add_calls: list[int] = []
+
+    def flaky_add(chunks, _paths=None):
+        add_calls.append(len(chunks))
+        if len(add_calls) == 1:
+            raise RuntimeError("embedding api down")
+
+    monkeypatch.setattr(knowledge_bases_api.vector_store_service, "add_chunks", flaky_add)
+    monkeypatch.setattr(
+        knowledge_bases_api.vector_store_service, "delete_chunks", lambda _ids: None
+    )
+
+    response = client.post(f"/api/kbs/{kb['id']}/rebuild-index")
+
+    assert response.status_code == 200
+    assert add_calls == [1, 1], "compensation must re-run the failed upsert"
+    assert response.json()["indexed_chunks"] == 1
+
+
+def test_rebuild_returns_502_when_compensation_also_fails(
+    client: TestClient, db_session: Session, monkeypatch, tmp_path: Path
+) -> None:
+    kb = _create_kb(client)
+    _enable_sync_processing(client, db_session, monkeypatch, tmp_path)
+    uploaded = _upload_md(client, kb["id"], "gone.md", "# 第一章\n\n正文\n")
+    document = db_session.get(Document, uploaded["id"])
+    Path(document.file_path).unlink()
+
+    def always_failing_add(_chunks, _paths=None):
+        raise RuntimeError("embedding api still down")
+
+    monkeypatch.setattr(knowledge_bases_api.vector_store_service, "add_chunks", always_failing_add)
+    monkeypatch.setattr(
+        knowledge_bases_api.vector_store_service, "delete_chunks", lambda _ids: None
+    )
+
+    response = client.post(f"/api/kbs/{kb['id']}/rebuild-index")
+
+    assert response.status_code == 502
+    assert "rebuild" in response.json()["detail"].lower()
+    assert kb["id"] not in knowledge_bases_api._rebuilding_kbs
+
+
 def test_rebuild_reparses_finished_documents(
     client: TestClient, db_session: Session, monkeypatch, tmp_path: Path
 ) -> None:

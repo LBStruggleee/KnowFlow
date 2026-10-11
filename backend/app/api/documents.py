@@ -4,11 +4,11 @@ from uuid import uuid4
 
 from app.core.config import settings
 from app.core.database import BASE_DIR, get_db
-from app.core.db_utils import safe_commit
+from app.core.db_utils import get_knowledge_base_or_404, safe_commit
+from app.core.files import safe_unlink
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.document_section import DocumentSection
-from app.models.knowledge_base import KnowledgeBase
 from app.schemas.document import DocumentRead
 from app.schemas.document_chunk import DocumentChunkRead
 from app.schemas.document_section import DocumentSectionTree
@@ -42,12 +42,7 @@ async def upload_document(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> DocumentRead:
-    knowledge_base = db.get(KnowledgeBase, kb_id)
-    if knowledge_base is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Knowledge base not found.",
-        )
+    get_knowledge_base_or_404(db, kb_id)
 
     original_name = Path(file.filename or "uploaded_file").name
     suffix = Path(original_name).suffix.lower()
@@ -138,12 +133,7 @@ def list_documents(
     kb_id: int,
     db: Session = Depends(get_db),
 ) -> list[DocumentRead]:
-    knowledge_base = db.get(KnowledgeBase, kb_id)
-    if knowledge_base is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Knowledge base not found.",
-        )
+    get_knowledge_base_or_404(db, kb_id)
 
     rows = db.execute(
         select(Document, func.count(DocumentChunk.id))
@@ -214,7 +204,7 @@ def delete_document(
         vector_store_service.delete_chunks(chunk_ids)
     except Exception:
         logger.exception("Vector cleanup failed for deleted document id=%s", document_id)
-    _safe_unlink(file_path)
+    safe_unlink(file_path)
 
 
 @router.get(
@@ -325,15 +315,3 @@ def _document_read(
     return DocumentRead.model_validate(
         {**document.__dict__, "chunk_count": int(chunk_count), "file_size": file_size}
     )
-
-
-def _safe_unlink(file_path: Path) -> None:
-    try:
-        file_path.resolve().relative_to(UPLOAD_DIR.resolve())
-    except ValueError:
-        logger.error("Refusing to delete path outside upload directory: %s", file_path)
-        return
-    try:
-        file_path.unlink(missing_ok=True)
-    except OSError:
-        logger.exception("Could not delete uploaded file: %s", file_path)

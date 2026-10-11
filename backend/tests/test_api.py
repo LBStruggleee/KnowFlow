@@ -78,6 +78,58 @@ def test_chat_uses_configured_top_k_and_passes_history(
     ]
 
 
+def test_chat_failure_returns_502_and_keeps_conversation_and_user_message(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    kb = _create_kb(client)
+
+    def failing_answer(**_kwargs):
+        raise RuntimeError("upstream exploded")
+
+    monkeypatch.setattr(chat_api.rag_service, "answer", failing_answer)
+    failed = client.post("/api/chat", json={"kb_id": kb["id"], "question": "会失败的问题"})
+
+    assert failed.status_code == 502
+    conversation = db_session.scalar(select(Conversation))
+    messages = list(db_session.scalars(select(ChatMessage).order_by(ChatMessage.id)))
+    assert conversation is not None
+    assert [(message.role, message.content) for message in messages] == [("user", "会失败的问题")]
+
+    captured: dict[str, Any] = {}
+
+    def recovered_answer(**kwargs):
+        captured["history"] = kwargs["history"]
+        return {
+            "answer": "已恢复",
+            "sources": [],
+            "usage": None,
+            "retrieval_trace": None,
+        }
+
+    monkeypatch.setattr(chat_api.rag_service, "answer", recovered_answer)
+    recovered = client.post(
+        "/api/chat",
+        json={
+            "kb_id": kb["id"],
+            "question": "第二问",
+            "conversation_id": conversation.id,
+        },
+    )
+
+    assert recovered.status_code == 200
+    assert [message["role"] for message in captured["history"]] == ["user"]
+    assert captured["history"][0]["content"] == "会失败的问题"
+    assistant_messages = [
+        message
+        for message in db_session.scalars(select(ChatMessage))
+        if message.role == "assistant"
+    ]
+    assert len(assistant_messages) == 1
+    assert assistant_messages[0].content == "已恢复"
+
+
 def test_delete_knowledge_base_removes_conversations(
     client: TestClient,
     db_session: Session,

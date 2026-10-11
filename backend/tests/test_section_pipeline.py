@@ -34,6 +34,24 @@ def _create_finished_document(
     return document
 
 
+def test_document_defaults_to_processing_status(db_session: Session) -> None:
+    knowledge_base = KnowledgeBase(name="KB-default-status")
+    db_session.add(knowledge_base)
+    db_session.flush()
+    document = Document(
+        kb_id=knowledge_base.id,
+        title="default",
+        file_name="default.md",
+        file_path="storage/uploads/1/default.md",
+        file_type="md",
+    )
+
+    db_session.add(document)
+    db_session.flush()
+
+    assert document.status == "processing"
+
+
 def test_process_builds_section_tree_and_chunk_links(
     db_session: Session, monkeypatch, tmp_path: Path
 ) -> None:

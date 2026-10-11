@@ -1,10 +1,8 @@
 import json
-from typing import Any
 
 from app.core.database import get_db
-from app.core.db_utils import safe_commit
+from app.core.db_utils import get_knowledge_base_or_404, load_json_column, safe_commit
 from app.models.conversation import ChatMessage, Conversation
-from app.models.knowledge_base import KnowledgeBase
 from app.models.learning_record import LearningRecord
 from app.schemas.learning_record import (
     LearningRecordCreate,
@@ -99,8 +97,7 @@ def _validate_links(
     conversation_id: int | None,
     source_message_id: int | None,
 ) -> None:
-    if db.get(KnowledgeBase, kb_id) is None:
-        raise HTTPException(status_code=404, detail="Knowledge base not found.")
+    get_knowledge_base_or_404(db, kb_id)
     if conversation_id is not None:
         conversation = db.get(Conversation, conversation_id)
         if conversation is None or conversation.kb_id != kb_id:
@@ -118,14 +115,6 @@ def _get_record_or_404(db: Session, record_id: int) -> LearningRecord:
     return record
 
 
-def _load_json(value: str, default: Any) -> Any:
-    try:
-        loaded = json.loads(value)
-    except (TypeError, json.JSONDecodeError):
-        return default
-    return loaded if isinstance(loaded, type(default)) else default
-
-
 def _record_read(record: LearningRecord) -> LearningRecordRead:
     return LearningRecordRead(
         id=record.id,
@@ -135,8 +124,8 @@ def _record_read(record: LearningRecord) -> LearningRecordRead:
         record_type=record.record_type,
         title=record.title,
         content=record.content,
-        tags=_load_json(record.tags_json, []),
-        metadata=_load_json(record.metadata_json, {}),
+        tags=load_json_column(record.tags_json, []),
+        metadata=load_json_column(record.metadata_json, {}),
         created_at=record.created_at,
         updated_at=record.updated_at,
     )

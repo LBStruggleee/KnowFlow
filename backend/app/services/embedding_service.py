@@ -2,13 +2,16 @@ import hashlib
 import logging
 import math
 import re
+import time
+from collections.abc import Callable
 from typing import Protocol
 
-from app.core.config import settings
+from app.core.config import is_api_key_configured, settings
 from fastapi import HTTPException, status
 from openai import APIConnectionError, APIStatusError, OpenAI
 
 EMBEDDING_DIMENSION = 384
+FALLBACK_COOLDOWN_SECONDS = 60.0
 logger = logging.getLogger(__name__)
 
 
@@ -92,32 +95,77 @@ class DashScopeEmbeddingService:
 
 
 class ResilientEmbeddingService:
-    """Use the configured provider until it fails, then stay on local embeddings."""
+    """Use the configured provider, fall back locally, and probe for recovery.
+
+    After a failure the service serves requests with the local hashing
+    provider for ``cooldown_seconds``; once the cooldown elapses the next
+    request probes the primary again and switches back when it answers.
+    """
 
     def __init__(
         self,
         primary: EmbeddingProvider,
         fallback: EmbeddingProvider | None = None,
+        *,
+        cooldown_seconds: float = FALLBACK_COOLDOWN_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.primary = primary
         self.fallback = fallback or HashingEmbeddingService()
         self.active: EmbeddingProvider = primary
+        self._cooldown_seconds = cooldown_seconds
+        self._clock = clock
+        self._fallback_since: float | None = None
 
     def use_fallback(self) -> None:
+        if self.active is self.fallback:
+            return
+        logger.warning(
+            "Embedding provider %s unavailable; switching to local hashing vectors",
+            self.primary.index_name,
+        )
         self.active = self.fallback
+        self._fallback_since = self._clock()
+
+    def _cooldown_elapsed(self) -> bool:
+        if self._fallback_since is None:
+            return False
+        return self._clock() - self._fallback_since >= self._cooldown_seconds
 
     def embed_text(self, text: str) -> list[float]:
         return self.embed_texts([text])[0]
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        if self.active is self.fallback and self._cooldown_elapsed():
+            recovered = self._probe_primary(texts)
+            if recovered is not None:
+                return recovered
         try:
             return self.active.embed_texts(texts)
         except HTTPException:
             if self.active is self.fallback:
                 raise
-            logger.info("Embedding provider unavailable; switching to local hashing vectors")
             self.use_fallback()
             return self.active.embed_texts(texts)
+
+    def _probe_primary(self, texts: list[str]) -> list[list[float]] | None:
+        """Give the primary provider one request to prove it recovered."""
+        try:
+            vectors = self.primary.embed_texts(texts)
+        except HTTPException:
+            logger.warning(
+                "Embedding primary provider %s is still unavailable; staying on local hashing",
+                self.primary.index_name,
+            )
+            self._fallback_since = self._clock()
+            return None
+        logger.warning(
+            "Embedding primary provider %s recovered; switching back from local hashing",
+            self.primary.index_name,
+        )
+        self.active = self.primary
+        self._fallback_since = None
+        return vectors
 
     @property
     def index_name(self) -> str:
@@ -134,9 +182,7 @@ def _tokenize(text: str) -> list[str]:
     return words + chinese_chars + chinese_bigrams
 
 
-has_api_key = bool(
-    settings.dashscope_api_key and settings.dashscope_api_key != "your_dashscope_api_key"
-)
+has_api_key = is_api_key_configured(settings.dashscope_api_key)
 if settings.embedding_provider == "dashscope" and has_api_key:
     embedding_service = ResilientEmbeddingService(DashScopeEmbeddingService())
 else:

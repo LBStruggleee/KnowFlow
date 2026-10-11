@@ -1,10 +1,6 @@
-import json
-import logging
-
 from app.core.database import get_db
-from app.core.db_utils import safe_commit
+from app.core.db_utils import get_knowledge_base_or_404, load_json_column, safe_commit
 from app.models.conversation import ChatMessage, Conversation
-from app.models.knowledge_base import KnowledgeBase
 from app.schemas.conversation import (
     ChatMessageRead,
     ConversationCreate,
@@ -16,7 +12,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
-logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=ConversationRead, status_code=status.HTTP_201_CREATED)
@@ -24,11 +19,7 @@ def create_conversation(
     payload: ConversationCreate,
     db: Session = Depends(get_db),
 ) -> Conversation:
-    if db.get(KnowledgeBase, payload.kb_id) is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Knowledge base not found.",
-        )
+    get_knowledge_base_or_404(db, payload.kb_id)
     conversation = Conversation(kb_id=payload.kb_id, title=payload.title)
     db.add(conversation)
     safe_commit(db)
@@ -107,9 +98,4 @@ def delete_conversation(
 
 
 def _load_sources(value: str) -> list[dict[str, object]]:
-    try:
-        sources = json.loads(value or "[]")
-    except (TypeError, json.JSONDecodeError):
-        logger.warning("Ignoring malformed message sources JSON")
-        return []
-    return sources if isinstance(sources, list) else []
+    return load_json_column(value, [])

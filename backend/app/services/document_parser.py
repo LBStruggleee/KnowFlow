@@ -101,15 +101,8 @@ class ParsedSection(BaseModel):
     content: str = ""
 
 
-class ParsedTable(BaseModel):
-    headers: list[str] = []
-    rows: list[list[str]] = []
-    source_section_order: int = -1
-
-
 class ParsedDocument(BaseModel):
     sections: list[ParsedSection] = []
-    tables: list[ParsedTable] = []
     lead_content: str = ""
 
 

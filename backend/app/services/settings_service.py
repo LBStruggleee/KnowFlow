@@ -1,6 +1,10 @@
+import logging
+
 from app.models.system_setting import SystemSetting
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SETTINGS: dict[str, tuple[str, str]] = {
     "top_k": ("5", "RAG 检索召回片段数"),
@@ -64,11 +68,26 @@ def update_settings(db: Session, payload: dict[str, object]) -> dict[str, str]:
 def typed_settings(db: Session) -> dict[str, object]:
     values = get_settings(db)
     return {
-        "top_k": int(values["top_k"]),
-        "score_threshold": float(values["score_threshold"]),
+        "top_k": _coerce_setting(values["top_k"], "top_k", int),
+        "score_threshold": _coerce_setting(values["score_threshold"], "score_threshold", float),
         "qwen_model": values["qwen_model"],
-        "temperature": float(values["temperature"]),
+        "temperature": _coerce_setting(values["temperature"], "temperature", float),
         "privacy_mode": values["privacy_mode"],
         "glass_variant": values["glass_variant"],
         "retrieval_channels": normalize_retrieval_channels(values["retrieval_channels"]),
     }
+
+
+def _coerce_setting(raw: object, key: str, converter: type) -> object:
+    """Convert a stored setting, falling back to its default when corrupted."""
+    default = DEFAULT_SETTINGS[key][0]
+    try:
+        return converter(raw)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Stored setting %s=%r is invalid; falling back to default %r",
+            key,
+            raw,
+            default,
+        )
+        return converter(default)

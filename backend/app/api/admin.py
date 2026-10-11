@@ -1,10 +1,11 @@
-import json
+import logging
 import shutil
 from pathlib import Path
 from typing import Any
 
-from app.core.database import BASE_DIR, get_db
-from app.core.db_utils import safe_commit
+from app.core.database import get_db
+from app.core.db_utils import load_json_column, safe_commit
+from app.core.files import UPLOAD_ROOT, safe_unlink
 from app.models.conversation import ChatMessage, Conversation
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
@@ -29,7 +30,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
-UPLOAD_ROOT = BASE_DIR / "storage" / "uploads"
+logger = logging.getLogger(__name__)
 
 
 @router.get("/settings", response_model=SystemSettingsRead)
@@ -102,15 +103,15 @@ def export_all_data(db: Session = Depends(get_db)) -> JSONResponse:
         "messages": [
             {
                 **_model_dict(item, exclude={"sources_json"}),
-                "sources": _safe_json(item.sources_json, []),
+                "sources": load_json_column(item.sources_json, []),
             }
             for item in db.scalars(select(ChatMessage))
         ],
         "learning_records": [
             {
                 **_model_dict(item, exclude={"tags_json", "metadata_json"}),
-                "tags": _safe_json(item.tags_json, []),
-                "metadata": _safe_json(item.metadata_json, {}),
+                "tags": load_json_column(item.tags_json, []),
+                "metadata": load_json_column(item.metadata_json, {}),
             }
             for item in db.scalars(select(LearningRecord))
         ],
@@ -150,9 +151,9 @@ def clear_all_data(
         try:
             vector_store_service.delete_knowledge_base(kb_id)
         except Exception:
-            continue
+            logger.exception("Vector cleanup failed for knowledge base id=%s during clear", kb_id)
     for file_path in file_paths:
-        _safe_unlink(file_path)
+        safe_unlink(file_path)
     for kb_id in kb_ids:
         upload_dir = (UPLOAD_ROOT / str(kb_id)).resolve()
         try:
@@ -167,22 +168,3 @@ def clear_all_data(
 def _model_dict(model: Any, exclude: set[str] | None = None) -> dict[str, Any]:
     omitted = {"_sa_instance_state", *(exclude or set())}
     return {key: value for key, value in model.__dict__.items() if key not in omitted}
-
-
-def _safe_json(value: str, default: Any) -> Any:
-    try:
-        loaded = json.loads(value or "")
-    except (TypeError, json.JSONDecodeError):
-        return default
-    return loaded if isinstance(loaded, type(default)) else default
-
-
-def _safe_unlink(file_path: Path) -> None:
-    try:
-        file_path.resolve().relative_to(UPLOAD_ROOT.resolve())
-    except ValueError:
-        return
-    try:
-        file_path.unlink(missing_ok=True)
-    except OSError:
-        return

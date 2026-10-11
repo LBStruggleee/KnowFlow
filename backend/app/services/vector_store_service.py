@@ -71,15 +71,11 @@ class VectorStoreService:
     def delete_chunks(self, chunk_ids: list[int]) -> None:
         if not chunk_ids:
             return
-        for collection in self._known_collections():
+        for collection in self.known_collections():
             collection.delete(ids=[_chunk_vector_id(chunk_id) for chunk_id in chunk_ids])
 
-    def delete_document(self, document_id: int) -> None:
-        for collection in self._known_collections():
-            collection.delete(where={"document_id": document_id})
-
     def delete_knowledge_base(self, kb_id: int) -> None:
-        for collection in self._known_collections():
+        for collection in self.known_collections():
             collection.delete(where={"kb_id": kb_id})
 
     def search(self, kb_id: int, query: str, top_k: int = 5) -> list[dict[str, Any]]:
@@ -118,13 +114,25 @@ class VectorStoreService:
             )
         return matches
 
-    def _known_collections(self) -> list[Any]:
+    def known_collections(self) -> list[Any]:
+        """Every collection this service may have written to."""
         index_names = {embedding_service.primary.index_name, embedding_service.fallback.index_name}
         return [self._collection_for(index_name) for index_name in index_names]
 
 
 def _chunk_vector_id(chunk_id: int) -> str:
     return f"chunk-{chunk_id}"
+
+
+def parse_chunk_vector_id(vector_id: str) -> int | None:
+    """Map a stored vector id back to its chunk id, or None when foreign."""
+    prefix = "chunk-"
+    if not vector_id.startswith(prefix):
+        return None
+    suffix = vector_id[len(prefix) :]
+    if not suffix.isdigit():
+        return None
+    return int(suffix)
 
 
 def _collection_name(index_name: str) -> str:

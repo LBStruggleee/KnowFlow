@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from app.core.config import settings
+from app.core.config import is_api_key_configured, settings
 from fastapi import HTTPException, status
 from openai import APIConnectionError, APIStatusError, OpenAI
 
@@ -14,7 +14,7 @@ class QwenLLMService:
         self.base_url = settings.qwen_base_url
         self.api_key = settings.dashscope_api_key
         self.client: OpenAI | None = None
-        if self.api_key:
+        if is_api_key_configured(self.api_key):
             self.client = OpenAI(
                 api_key=self.api_key,
                 base_url=self.base_url,
@@ -23,11 +23,7 @@ class QwenLLMService:
 
     @property
     def available(self) -> bool:
-        return (
-            self.client is not None
-            and bool(self.api_key)
-            and self.api_key != "your_dashscope_api_key"
-        )
+        return self.client is not None and is_api_key_configured(self.api_key)
 
     def chat(
         self,
@@ -39,7 +35,7 @@ class QwenLLMService:
     ) -> dict[str, Any]:
         if not self.available:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="DASHSCOPE_API_KEY is not configured. Please set it in backend/.env.",
             )
 

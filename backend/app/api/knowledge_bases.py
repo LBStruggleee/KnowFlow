@@ -1,9 +1,11 @@
 import logging
 import shutil
+import threading
 from pathlib import Path
 
-from app.core.database import BASE_DIR, get_db
-from app.core.db_utils import commit_or_conflict, safe_commit
+from app.core.database import get_db
+from app.core.db_utils import commit_or_conflict, get_knowledge_base_or_404, safe_commit
+from app.core.files import UPLOAD_ROOT, safe_unlink
 from app.models.conversation import ChatMessage, Conversation
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
@@ -27,7 +29,12 @@ from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/kbs", tags=["knowledge bases"])
 logger = logging.getLogger(__name__)
-UPLOAD_ROOT = BASE_DIR / "storage" / "uploads"
+
+# In-process guard so two rebuild requests for the same knowledge base can
+# never overlap. The synchronous long request is kept deliberately (see the
+# endpoint comment); the guard removes the concurrent-write window.
+_rebuild_guard = threading.Lock()
+_rebuilding_kbs: set[int] = set()
 
 
 @router.post(
@@ -67,7 +74,7 @@ def get_knowledge_base(
     kb_id: int,
     db: Session = Depends(get_db),
 ) -> KnowledgeBase:
-    return _get_knowledge_base_or_404(db, kb_id)
+    return get_knowledge_base_or_404(db, kb_id)
 
 
 @router.patch("/{kb_id}", response_model=KnowledgeBaseRead)
@@ -76,7 +83,7 @@ def update_knowledge_base(
     payload: KnowledgeBaseUpdate,
     db: Session = Depends(get_db),
 ) -> KnowledgeBase:
-    knowledge_base = _get_knowledge_base_or_404(db, kb_id)
+    knowledge_base = get_knowledge_base_or_404(db, kb_id)
 
     if payload.name is not None and payload.name != knowledge_base.name:
         existing = db.scalar(select(KnowledgeBase).where(KnowledgeBase.name == payload.name))
@@ -102,7 +109,7 @@ def delete_knowledge_base(
     kb_id: int,
     db: Session = Depends(get_db),
 ) -> None:
-    knowledge_base = _get_knowledge_base_or_404(db, kb_id)
+    knowledge_base = get_knowledge_base_or_404(db, kb_id)
     documents = list(db.scalars(select(Document).where(Document.kb_id == kb_id)))
     file_paths = [Path(document.file_path) for document in documents]
 
@@ -122,7 +129,7 @@ def delete_knowledge_base(
     except Exception:
         logger.exception("Vector cleanup failed for deleted knowledge base id=%s", kb_id)
     for file_path in file_paths:
-        _safe_unlink(file_path)
+        safe_unlink(file_path)
     _remove_upload_dir(kb_id)
 
 
@@ -131,7 +138,35 @@ def rebuild_knowledge_base_index(
     kb_id: int,
     db: Session = Depends(get_db),
 ) -> IndexRebuildRead:
-    _get_knowledge_base_or_404(db, kb_id)
+    # Kept synchronous on purpose: the single-user deployment has no polling
+    # UI, so async rebuilds would need new status plumbing. The guard below
+    # and the processing check make concurrent invocations fail fast instead
+    # of interleaving vector writes.
+    with _rebuild_guard:
+        if kb_id in _rebuilding_kbs:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Index rebuild is already running for this knowledge base.",
+            )
+        _rebuilding_kbs.add(kb_id)
+    try:
+        return _rebuild_index(db, kb_id)
+    finally:
+        with _rebuild_guard:
+            _rebuilding_kbs.discard(kb_id)
+
+
+def _rebuild_index(db: Session, kb_id: int) -> IndexRebuildRead:
+    get_knowledge_base_or_404(db, kb_id)
+    processing_id = db.scalar(
+        select(Document.id).where(Document.kb_id == kb_id, Document.status == "processing").limit(1)
+    )
+    if processing_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Knowledge base has documents still processing. Retry after they finish.",
+        )
+
     documents = list(
         db.scalars(
             select(Document)
@@ -156,14 +191,7 @@ def rebuild_knowledge_base_index(
                         or 0
                     )
             else:
-                stale = list(
-                    db.scalars(
-                        select(DocumentChunk).where(DocumentChunk.document_id == document.id)
-                    )
-                )
-                vector_store_service.delete_chunks([chunk.id for chunk in stale])
-                vector_store_service.add_chunks(stale, _chunk_section_paths(db, stale))
-                indexed_chunks += len(stale)
+                indexed_chunks += _reindex_chunks_without_source(db, kb_id, document)
     except HTTPException:
         raise
     except Exception as exc:
@@ -178,6 +206,43 @@ def rebuild_knowledge_base_index(
         collection=vector_store_service.collection_name,
         embedding_provider=vector_store_service.embedding_provider,
     )
+
+
+def _reindex_chunks_without_source(db: Session, kb_id: int, document: Document) -> int:
+    """Refresh vectors for chunks whose source file is gone.
+
+    Vectors are deleted first, so a failed re-index would lose them; the
+    compensation below re-runs the upsert once and turns a persistent
+    failure into an explicit 502 instead of silent data loss.
+    """
+    stale = list(db.scalars(select(DocumentChunk).where(DocumentChunk.document_id == document.id)))
+    stale_paths = _chunk_section_paths(db, stale)
+    vector_store_service.delete_chunks([chunk.id for chunk in stale])
+    try:
+        vector_store_service.add_chunks(stale, stale_paths)
+    except Exception as exc:
+        logger.exception(
+            "Re-indexing %s chunks without source files failed for knowledge base id=%s",
+            len(stale),
+            kb_id,
+        )
+        try:
+            vector_store_service.add_chunks(stale, stale_paths)
+        except Exception:
+            logger.exception(
+                "Vector compensation failed for knowledge base id=%s; "
+                "run rebuild again to restore these vectors",
+                kb_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=(
+                    "Could not rebuild the vector index. "
+                    "Run rebuild again to restore missing vectors."
+                ),
+            ) from exc
+        logger.warning("Vector compensation succeeded for knowledge base id=%s", kb_id)
+    return len(stale)
 
 
 def _chunk_section_paths(db: Session, chunks: list[DocumentChunk]) -> dict[int, str]:
@@ -196,28 +261,6 @@ def _chunk_section_paths(db: Session, chunks: list[DocumentChunk]) -> dict[int, 
         for chunk in chunks
         if chunk.id is not None and chunk.section_id is not None
     }
-
-
-def _get_knowledge_base_or_404(db: Session, kb_id: int) -> KnowledgeBase:
-    knowledge_base = db.get(KnowledgeBase, kb_id)
-    if knowledge_base is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Knowledge base not found.",
-        )
-    return knowledge_base
-
-
-def _safe_unlink(file_path: Path) -> None:
-    try:
-        file_path.resolve().relative_to(UPLOAD_ROOT.resolve())
-    except ValueError:
-        logger.error("Refusing to delete path outside upload directory: %s", file_path)
-        return
-    try:
-        file_path.unlink(missing_ok=True)
-    except OSError:
-        logger.exception("Could not delete uploaded file: %s", file_path)
 
 
 def _remove_upload_dir(kb_id: int) -> None:

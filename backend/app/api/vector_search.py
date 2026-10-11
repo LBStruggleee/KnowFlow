@@ -1,12 +1,20 @@
+"""Hybrid retrieval endpoint.
+
+Despite the historical ``/search`` path, this endpoint does not run a
+vector-only query: it dispatches through the configured retrieval channels
+(vector, lexical, or hybrid, per the ``retrieval_channels`` setting) and
+fuses ranked results with RRF. The route path is kept for compatibility.
+"""
+
 from app.core.database import get_db
-from app.models.knowledge_base import KnowledgeBase
+from app.core.db_utils import get_knowledge_base_or_404
 from app.schemas.vector_search import VectorSearchRequest, VectorSearchResponse
 from app.services.hybrid_search import search_hybrid
 from app.services.settings_service import typed_settings
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-router = APIRouter(prefix="/api/kbs", tags=["vector search"])
+router = APIRouter(prefix="/api/kbs", tags=["hybrid search"])
 
 
 @router.post("/{kb_id}/search", response_model=VectorSearchResponse)
@@ -15,12 +23,7 @@ def search_knowledge_base(
     payload: VectorSearchRequest,
     db: Session = Depends(get_db),
 ) -> VectorSearchResponse:
-    knowledge_base = db.get(KnowledgeBase, kb_id)
-    if knowledge_base is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Knowledge base not found.",
-        )
+    get_knowledge_base_or_404(db, kb_id)
 
     config = typed_settings(db)
     hybrid = search_hybrid(

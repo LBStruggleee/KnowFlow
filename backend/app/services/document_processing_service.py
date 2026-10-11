@@ -41,7 +41,6 @@ def _persist_section_tree(
         section_level=0,
         section_order=0,
         chunk_count=0,
-        summary="",
     )
     db.add(root)
     db.flush()
@@ -60,7 +59,6 @@ def _persist_section_tree(
             section_level=section.level,
             section_order=order_counter,
             chunk_count=0,
-            summary="",
         )
         db.add(node)
         db.flush()

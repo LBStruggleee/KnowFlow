@@ -64,7 +64,6 @@ def test_parsed_document_defaults_to_empty() -> None:
     parsed = ParsedDocument()
 
     assert parsed.sections == []
-    assert parsed.tables == []
     assert parsed.lead_content == ""
 
 

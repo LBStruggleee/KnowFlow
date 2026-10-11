@@ -22,6 +22,9 @@ class DocumentSection(Base):
     section_level: Mapped[int] = mapped_column(Integer, default=0)
     section_order: Mapped[int] = mapped_column(Integer, default=0)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Legacy column kept so inserts still satisfy existing databases, where
+    # summary is NOT NULL without a server default. Nothing reads it; a future
+    # migration may drop the column together with this field.
     summary: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

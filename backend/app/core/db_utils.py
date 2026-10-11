@@ -1,8 +1,13 @@
 """Database utility functions for consistent exception handling."""
 
+import json
 import logging
+from typing import Any
 
+from app.models.knowledge_base import KnowledgeBase
+from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +44,32 @@ def commit_or_conflict(db) -> None:
     try:
         safe_commit(db)
     except CommitConflictError as exc:
-        from fastapi import HTTPException
-
         raise HTTPException(
             status_code=409,
             detail="Resource already exists.",
         ) from exc
+
+
+def load_json_column(value: str | None, default: Any) -> Any:
+    """Parse a JSON column value, falling back to ``default`` when malformed.
+
+    The parsed value must match the type of ``default`` so callers always
+    receive the shape they declared.
+    """
+    try:
+        loaded = json.loads(value or "")
+    except (TypeError, json.JSONDecodeError):
+        logger.warning("Ignoring malformed JSON column value")
+        return default
+    return loaded if isinstance(loaded, type(default)) else default
+
+
+def get_knowledge_base_or_404(db: Session, kb_id: int) -> KnowledgeBase:
+    """Fetch a knowledge base or raise the shared 404 response."""
+    knowledge_base = db.get(KnowledgeBase, kb_id)
+    if knowledge_base is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Knowledge base not found.",
+        )
+    return knowledge_base
