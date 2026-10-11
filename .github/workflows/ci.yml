@@ -30,7 +30,7 @@ jobs:
           PYTHONPATH: backend
         run: pytest backend/tests -q
       - name: Audit backend dependencies
-        run: pip-audit -r backend/requirements.txt --ignore-vuln PYSEC-2026-311
+        run: pip-audit -r backend/requirements.txt --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
 
   frontend:
     runs-on: ubuntu-latest

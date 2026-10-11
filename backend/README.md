@@ -44,10 +44,10 @@ $env:PYTHONPATH = "."
 pytest tests -q
 ruff check .
 ruff format --check .
-pip-audit -r requirements.txt --ignore-vuln PYSEC-2026-311
+pip-audit -r requirements.txt --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
 ```
 
-`PYSEC-2026-311` 当前没有上游修复版本，影响 Chroma 的服务端鉴权场景。本项目只使用进程内的本地 `PersistentClient`，且后端默认仅监听 `127.0.0.1`；不得把 Chroma 作为独立公网服务暴露。
+`PYSEC-2026-311` 当前没有上游修复版本，影响 Chroma 的服务端鉴权场景；`PYSEC-2026-3813`、`PYSEC-2026-3814`、`PYSEC-2026-3815` 是 chromadb 1.5.9 的另外三条公告，同样没有上游修复版本。本项目只使用进程内的本地 `PersistentClient`，且后端默认仅监听 `127.0.0.1`；不得把 Chroma 作为独立公网服务暴露。chromadb 发布包含修复的版本后，应升级并移除相应豁免。
 
 ## Knowledge Base API
 

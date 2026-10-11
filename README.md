@@ -13,7 +13,7 @@ KnowFlow 是一个本地单用户的智能知识库问答应用，覆盖文档�
 - 每条回答返回引用片段、相似度分数、检索 trace 和 token 使用量。
 - 上传采用分块落盘和大小限制，并立即返回 `processing`；解析、分块、embedding、Chroma 写入在进程内后台任务中完成，前端自动轮询最终状态，失败文档可以一键重试。
 - SQLite 是事实数据源，Chroma 是可重建索引；支持知识库级索引重建。
-- 后端 19 项 pytest、前端 3 项 Vitest、Ruff、Vite build 和依赖审计已接入 GitHub Actions。
+- 后端 108 项 pytest、前端 23 项 Vitest、Ruff、Vite build 和依赖审计已接入 GitHub Actions。
 
 远端仓库：[LBStruggleee/KnowFlow](https://github.com/LBStruggleee/KnowFlow)
 稳定版本以仓库 `main` 分支和对应 GitHub Actions 结果为准。
@@ -183,7 +183,7 @@ ruff check .
 ruff format --check .
 python -m compileall -q app
 pip check
-pip-audit -r requirements.txt --ignore-vuln PYSEC-2026-311
+pip-audit -r requirements.txt --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
 ```
 
 执行前端检查：
@@ -195,7 +195,7 @@ npm run build
 npm audit --audit-level=high
 ```
 
-GitHub Actions 会在 push 和 pull request 时执行同类检查。当前验证基线为后端 19 项、前端 3 项测试全部通过。
+GitHub Actions 会在 push 和 pull request 时执行同类检查。当前验证基线为后端 108 项 pytest、前端 23 项 Vitest 测试全部通过。
 
 ## 主要 API
 
