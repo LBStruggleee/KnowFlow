@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.database import BASE_DIR, get_db
 from app.core.db_utils import get_knowledge_base_or_404, safe_commit
 from app.core.files import safe_unlink
+from app.core.pagination import Page, page_params
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.document_section import DocumentSection
@@ -131,6 +132,7 @@ def retry_document(
 @router.get("/kbs/{kb_id}/documents", response_model=list[DocumentRead])
 def list_documents(
     kb_id: int,
+    page: Page = Depends(page_params),
     db: Session = Depends(get_db),
 ) -> list[DocumentRead]:
     get_knowledge_base_or_404(db, kb_id)
@@ -141,6 +143,8 @@ def list_documents(
         .where(Document.kb_id == kb_id)
         .group_by(Document.id)
         .order_by(Document.id.desc())
+        .offset(page.offset)
+        .limit(page.limit)
     )
     return [
         _document_read(db, document, chunk_count=int(chunk_count)) for document, chunk_count in rows
@@ -213,6 +217,7 @@ def delete_document(
 )
 def list_document_chunks(
     document_id: int,
+    page: Page = Depends(page_params),
     db: Session = Depends(get_db),
 ) -> list[DocumentChunkRead]:
     document = db.get(Document, document_id)
@@ -227,6 +232,8 @@ def list_document_chunks(
             select(DocumentChunk)
             .where(DocumentChunk.document_id == document_id)
             .order_by(DocumentChunk.chunk_index.asc())
+            .offset(page.offset)
+            .limit(page.limit)
         )
     )
     section_ids = {chunk.section_id for chunk in chunks if chunk.section_id is not None}
@@ -261,8 +268,14 @@ def list_document_chunks(
 )
 def list_document_sections(
     document_id: int,
+    page: Page = Depends(page_params),
     db: Session = Depends(get_db),
 ) -> list[DocumentSectionTree]:
+    """Return the section tree; pagination applies to the flat pre-order list.
+
+    Sections are paged by ``section_order`` before the forest is built, so a
+    section whose parent falls outside the requested page appears as a root.
+    """
     document = db.get(Document, document_id)
     if document is None:
         raise HTTPException(
@@ -275,6 +288,8 @@ def list_document_sections(
             select(DocumentSection)
             .where(DocumentSection.document_id == document_id)
             .order_by(DocumentSection.section_order.asc())
+            .offset(page.offset)
+            .limit(page.limit)
         )
     )
     return _build_section_forest(sections)

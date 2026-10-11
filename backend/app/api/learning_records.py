@@ -2,6 +2,7 @@ import json
 
 from app.core.database import get_db
 from app.core.db_utils import get_knowledge_base_or_404, load_json_column, safe_commit
+from app.core.pagination import Page, page_params
 from app.models.conversation import ChatMessage, Conversation
 from app.models.learning_record import LearningRecord
 from app.schemas.learning_record import (
@@ -42,6 +43,7 @@ def create_learning_record(
 def list_learning_records(
     kb_id: int | None = None,
     record_type: str | None = None,
+    page: Page = Depends(page_params),
     db: Session = Depends(get_db),
 ) -> list[LearningRecordRead]:
     statement = select(LearningRecord).order_by(LearningRecord.updated_at.desc())
@@ -51,6 +53,7 @@ def list_learning_records(
         if record_type not in {"note", "exercise", "mistake"}:
             raise HTTPException(status_code=422, detail="Unsupported learning record type.")
         statement = statement.where(LearningRecord.record_type == record_type)
+    statement = statement.offset(page.offset).limit(page.limit)
     return [_record_read(record) for record in db.scalars(statement)]
 
 

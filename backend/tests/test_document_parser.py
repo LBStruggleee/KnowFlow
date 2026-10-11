@@ -220,6 +220,85 @@ def test_docx_structure_rejects_bold_non_headings(tmp_path: Path) -> None:
     assert "表格内的加粗说明" in parsed.lead_content
 
 
+def test_docx_text_keeps_table_at_its_original_position(tmp_path: Path) -> None:
+    from docx import Document as DocxDocument
+
+    path = tmp_path / "table-order.docx"
+    document = DocxDocument()
+    document.add_paragraph("表格前段落")
+    table = document.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "H1"
+    table.cell(0, 1).text = "H2"
+    table.cell(1, 0).text = "a"
+    table.cell(1, 1).text = "b"
+    document.add_paragraph("表格后段落")
+    document.save(path)
+
+    text = parse_document_text(path)
+
+    assert text == "表格前段落\n\nH1 | H2\n\na | b\n\n表格后段落"
+
+
+def test_docx_structure_inserts_table_rows_into_their_own_sections(tmp_path: Path) -> None:
+    from docx import Document as DocxDocument
+
+    path = tmp_path / "table-sections.docx"
+    document = DocxDocument()
+    document.add_paragraph("第一章", style="Heading 1")
+    document.add_paragraph("章导读")
+    first_table = document.add_table(rows=1, cols=2)
+    first_table.cell(0, 0).text = "章内表"
+    first_table.cell(0, 1).text = "数据"
+    document.add_paragraph("1.1 背景", style="Heading 2")
+    document.add_paragraph("背景正文")
+    second_table = document.add_table(rows=1, cols=1)
+    second_table.cell(0, 0).text = "节内表"
+    document.save(path)
+
+    parsed = _parse_docx_structure(path)
+
+    assert [section.title for section in parsed.sections] == ["第一章", "1.1 背景"]
+    # Each table stays where the document placed it instead of being appended
+    # after every paragraph (the regression this test guards).
+    assert parsed.sections[0].content == "章导读\n\n章内表 | 数据"
+    assert parsed.sections[1].content == "背景正文\n\n节内表"
+
+
+def test_docx_structure_keeps_leading_table_in_lead_content(tmp_path: Path) -> None:
+    from docx import Document as DocxDocument
+
+    path = tmp_path / "table-lead.docx"
+    document = DocxDocument()
+    document.add_paragraph("开篇导语")
+    table = document.add_table(rows=1, cols=2)
+    table.cell(0, 0).text = "导语表"
+    table.cell(0, 1).text = "值"
+    document.add_paragraph("第一章", style="Heading 1")
+    document.add_paragraph("正文")
+    document.save(path)
+
+    parsed = _parse_docx_structure(path)
+
+    assert parsed.lead_content == "开篇导语\n\n导语表 | 值"
+    assert parsed.sections[0].content == "正文"
+
+
+def test_docx_structure_skips_blank_table_rows(tmp_path: Path) -> None:
+    from docx import Document as DocxDocument
+
+    path = tmp_path / "table-blank.docx"
+    document = DocxDocument()
+    document.add_paragraph("正文段落")
+    table = document.add_table(rows=2, cols=1)
+    table.cell(0, 0).text = "   "
+    table.cell(1, 0).text = "有效行"
+    document.save(path)
+
+    text = parse_document_text(path)
+
+    assert text == "正文段落\n\n有效行"
+
+
 def test_pptx_structure_creates_one_section_per_slide(tmp_path: Path) -> None:
     from pptx import Presentation
 

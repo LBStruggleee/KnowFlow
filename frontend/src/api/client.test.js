@@ -14,7 +14,11 @@ vi.mock('axios', () => ({
 
 import {
   listConversations,
+  listKnowledgeBases,
+  listDocuments,
+  listDocumentChunks,
   listLearningRecords,
+  getConversation,
   clearAllData,
   askQuestion,
   uploadDocument,
@@ -31,10 +35,50 @@ describe('api/client', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/api/conversations', { params: { kb_id: 3 } })
   })
 
+  it('listConversations 可同时透传 kb_id 与分页参数', async () => {
+    await listConversations(3, { limit: 50, offset: 100 })
+    expect(mockApi.get).toHaveBeenCalledWith('/api/conversations', {
+      params: { kb_id: 3, limit: 50, offset: 100 },
+    })
+  })
+
+  it('listKnowledgeBases 不传分页参数时发送空查询串（向后兼容）', async () => {
+    await listKnowledgeBases()
+    expect(mockApi.get).toHaveBeenCalledWith('/api/kbs', { params: {} })
+  })
+
+  it('listKnowledgeBases 透传 limit/offset 分页参数', async () => {
+    await listKnowledgeBases({ limit: 25 })
+    expect(mockApi.get).toHaveBeenCalledWith('/api/kbs', { params: { limit: 25 } })
+  })
+
+  it('listDocuments 与 listDocumentChunks 透传分页参数', async () => {
+    await listDocuments(3, { limit: 10, offset: 20 })
+    expect(mockApi.get).toHaveBeenCalledWith('/api/kbs/3/documents', {
+      params: { limit: 10, offset: 20 },
+    })
+    await listDocumentChunks(7, { offset: 5 })
+    expect(mockApi.get).toHaveBeenCalledWith('/api/documents/7/chunks', { params: { offset: 5 } })
+  })
+
+  it('getConversation 透传消息分页参数', async () => {
+    await getConversation(9, { limit: 20, offset: 40 })
+    expect(mockApi.get).toHaveBeenCalledWith('/api/conversations/9', {
+      params: { limit: 20, offset: 40 },
+    })
+  })
+
   it('listLearningRecords 同时透传 kb_id 与 record_type', async () => {
     await listLearningRecords(2, 'mistake')
     expect(mockApi.get).toHaveBeenCalledWith('/api/learning-records', {
       params: { kb_id: 2, record_type: 'mistake' },
+    })
+  })
+
+  it('listLearningRecords 第三参透传分页参数', async () => {
+    await listLearningRecords(2, 'note', { limit: 25 })
+    expect(mockApi.get).toHaveBeenCalledWith('/api/learning-records', {
+      params: { kb_id: 2, record_type: 'note', limit: 25 },
     })
   })
 

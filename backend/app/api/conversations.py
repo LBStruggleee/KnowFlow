@@ -1,5 +1,6 @@
 from app.core.database import get_db
 from app.core.db_utils import get_knowledge_base_or_404, load_json_column, safe_commit
+from app.core.pagination import Page, page_params
 from app.models.conversation import ChatMessage, Conversation
 from app.schemas.conversation import (
     ChatMessageRead,
@@ -30,19 +31,22 @@ def create_conversation(
 @router.get("", response_model=list[ConversationRead])
 def list_conversations(
     kb_id: int | None = None,
+    page: Page = Depends(page_params),
     db: Session = Depends(get_db),
 ) -> list[Conversation]:
     statement = select(Conversation).order_by(Conversation.updated_at.desc())
     if kb_id is not None:
         statement = statement.where(Conversation.kb_id == kb_id)
-    return list(db.scalars(statement))
+    return list(db.scalars(statement.offset(page.offset).limit(page.limit)))
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetail)
 def get_conversation(
     conversation_id: int,
+    page: Page = Depends(page_params),
     db: Session = Depends(get_db),
 ) -> ConversationDetail:
+    """Return one conversation; pagination applies to its message list."""
     conversation = db.get(Conversation, conversation_id)
     if conversation is None:
         raise HTTPException(
@@ -55,6 +59,8 @@ def get_conversation(
             select(ChatMessage)
             .where(ChatMessage.conversation_id == conversation_id)
             .order_by(ChatMessage.id.asc())
+            .offset(page.offset)
+            .limit(page.limit)
         )
     )
     return ConversationDetail(

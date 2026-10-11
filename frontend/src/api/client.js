@@ -9,8 +9,17 @@ export function getApiBaseUrl() {
   return api.defaults.baseURL
 }
 
-export function listKnowledgeBases() {
-  return api.get('/api/kbs')
+// Pagination is optional everywhere: omitting it keeps the server defaults
+// (limit 100, offset 0), so existing callers stay unchanged.
+function paginationParams({ limit, offset } = {}) {
+  const params = {}
+  if (limit !== undefined) params.limit = limit
+  if (offset !== undefined) params.offset = offset
+  return params
+}
+
+export function listKnowledgeBases(page = {}) {
+  return api.get('/api/kbs', { params: paginationParams(page) })
 }
 
 export function createKnowledgeBase(payload) {
@@ -25,8 +34,8 @@ export function updateKnowledgeBase(kbId, payload) {
   return api.patch(`/api/kbs/${kbId}`, payload)
 }
 
-export function listDocuments(kbId) {
-  return api.get(`/api/kbs/${kbId}/documents`)
+export function listDocuments(kbId, page = {}) {
+  return api.get(`/api/kbs/${kbId}/documents`, { params: paginationParams(page) })
 }
 
 export function deleteDocument(documentId) {
@@ -56,8 +65,8 @@ export function rebuildKnowledgeBaseIndex(kbId) {
   return api.post(`/api/kbs/${kbId}/rebuild-index`)
 }
 
-export function listDocumentChunks(documentId) {
-  return api.get(`/api/documents/${documentId}/chunks`)
+export function listDocumentChunks(documentId, page = {}) {
+  return api.get(`/api/documents/${documentId}/chunks`, { params: paginationParams(page) })
 }
 
 export function askQuestion(payload) {
@@ -68,13 +77,14 @@ export function searchKnowledgeBase(kbId, payload) {
   return api.post(`/api/kbs/${kbId}/search`, payload)
 }
 
-export function listConversations(kbId) {
-  const params = kbId ? { kb_id: kbId } : {}
+export function listConversations(kbId, page = {}) {
+  const params = paginationParams(page)
+  if (kbId) params.kb_id = kbId
   return api.get('/api/conversations', { params })
 }
 
-export function getConversation(conversationId) {
-  return api.get(`/api/conversations/${conversationId}`)
+export function getConversation(conversationId, page = {}) {
+  return api.get(`/api/conversations/${conversationId}`, { params: paginationParams(page) })
 }
 
 export function deleteConversation(conversationId) {
@@ -97,8 +107,8 @@ export function getProviderStatus() {
   return api.get('/api/admin/providers')
 }
 
-export function listLearningRecords(kbId, recordType) {
-  const params = {}
+export function listLearningRecords(kbId, recordType, page = {}) {
+  const params = paginationParams(page)
   if (kbId) params.kb_id = kbId
   if (recordType) params.record_type = recordType
   return api.get('/api/learning-records', { params })

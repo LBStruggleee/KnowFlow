@@ -29,10 +29,11 @@ def db_session() -> Session:
         cursor.close()
 
     Base.metadata.create_all(engine)
-    # Function-level import: lexical_search pulls models; keep test import order stable.
-    from app.services.lexical_search import ensure_lexical_index
+    # Exercise the real startup migration path (fresh-database branch) so the
+    # suite always runs against the same schema a fresh deployment gets.
+    from app.core.migrations import run_migrations
 
-    ensure_lexical_index(engine)
+    run_migrations(engine)
     testing_session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     session = testing_session()
     try:

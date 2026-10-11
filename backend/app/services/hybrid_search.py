@@ -8,6 +8,36 @@ from sqlalchemy.orm import Session
 RRF_K = 60
 VALID_CHANNELS = ("vector", "lexical", "hybrid")
 
+# Score semantics of the returned hits. score_threshold must be compared
+# against a normalized [0, 1] scale, and only two of the three scales carry an
+# absolute meaning:
+# - vector: 1 - cosine distance, absolute in [0, 1];
+# - rrf_fused: the RRF sum divided by the best possible score (top rank in
+#   both channels), so a chunk ranked first everywhere scores 1.0 and a
+#   single-channel top rank scores 0.5;
+# - lexical: FTS bm25 is min-max normalized within the hit batch (a lone hit
+#   is always 1.0) and the LIKE fallback emits pure rank positions
+#   (1/(rank+1)) — batch-relative, no absolute meaning.
+VECTOR_SEMANTICS = "vector_cosine"
+RRF_SEMANTICS = "rrf_fused"
+LEXICAL_SEMANTICS = "lexical_relative"
+
+# Discount applied to lexical-only result sets before a score_threshold
+# comparison. Without it, a single lexical hit would trivially pass any
+# threshold ("单命中必过阈值" drift). With LEXICAL_ONLY_DISCOUNT = 0.5, a lone
+# lexical hit gates at 0.5 — it still clears low thresholds but no longer
+# pretends to be a perfect vector match; genuine multi-hit batches keep their
+# relative ordering and their best hit gates at 0.5 * best.
+LEXICAL_ONLY_DISCOUNT = 0.5
+
+
+def threshold_score(hits: list[dict[str, Any]], score_semantics: str) -> float:
+    """Best hit score on the normalized [0, 1] scale used for score_threshold."""
+    best = max((float(hit["score"]) for hit in hits), default=0.0)
+    if score_semantics == LEXICAL_SEMANTICS:
+        return best * LEXICAL_ONLY_DISCOUNT
+    return best
+
 
 class HybridResult(BaseModel):
     hits: list[dict[str, Any]]
@@ -73,8 +103,10 @@ def search_hybrid(
     )
 
     if mode == "vector" or (mode == "hybrid" and not lexical_hits):
+        trace["score_semantics"] = VECTOR_SEMANTICS
         return HybridResult(hits=vector_hits[:top_k], trace=trace)
     if mode == "lexical" or (mode == "hybrid" and not vector_hits):
+        trace["score_semantics"] = LEXICAL_SEMANTICS
         return HybridResult(hits=lexical_hits[:top_k], trace=trace)
 
     by_id: dict[int, dict[str, Any]] = {}
@@ -89,5 +121,6 @@ def search_hybrid(
     fused = fuse_rrf(rankings)
     ordered = sorted(fused, key=lambda chunk_id: fused[chunk_id], reverse=True)
     divisor = 2.0 * (1.0 / (RRF_K + 1))
+    trace["score_semantics"] = RRF_SEMANTICS
     hits = [{**by_id[chunk_id], "score": fused[chunk_id] / divisor} for chunk_id in ordered[:top_k]]
     return HybridResult(hits=hits, trace=trace)

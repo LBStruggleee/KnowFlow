@@ -1,11 +1,16 @@
 import pytest
 from app.services import hybrid_search as hybrid_module
 from app.services.hybrid_search import (
+    LEXICAL_ONLY_DISCOUNT,
+    LEXICAL_SEMANTICS,
+    RRF_SEMANTICS,
+    VECTOR_SEMANTICS,
     HybridResult,
     fuse_rrf,
     fusion_pool_size,
     normalize_channels,
     search_hybrid,
+    threshold_score,
 )
 
 
@@ -29,6 +34,21 @@ def test_fuse_rrf_scores_shared_hits_highest() -> None:
 def test_fuse_rrf_empty_channels() -> None:
     assert fuse_rrf([]) == {}
     assert fuse_rrf([[], []]) == {}
+
+
+def test_threshold_score_discounts_lexical_semantics_only() -> None:
+    hits = [_hit(1, 1.0), _hit(2, 0.5)]
+
+    # Lexical scores are batch-relative; vector scores are absolute, so only
+    # the lexical gate is discounted.
+    assert threshold_score(hits, LEXICAL_SEMANTICS) == pytest.approx(1.0 * LEXICAL_ONLY_DISCOUNT)
+    assert threshold_score(hits, VECTOR_SEMANTICS) == pytest.approx(1.0)
+    assert threshold_score(hits, RRF_SEMANTICS) == pytest.approx(1.0)
+
+
+def test_threshold_score_empty_hits_is_zero() -> None:
+    assert threshold_score([], LEXICAL_SEMANTICS) == 0.0
+    assert threshold_score([], VECTOR_SEMANTICS) == 0.0
 
 
 def _hit(chunk_id: int, score: float) -> dict:
@@ -68,6 +88,7 @@ def test_search_hybrid_fuses_both_channels(monkeypatch) -> None:
     assert result.hits[0]["score"] == pytest.approx(1.0)
     assert result.trace["mode"] == "hybrid"
     assert result.trace["fused_by"] == "rrf_k60"
+    assert result.trace["score_semantics"] == RRF_SEMANTICS
     assert result.trace["vector"]["returned"] == 2
     assert result.trace["lexical"]["returned"] == 2
 
@@ -82,6 +103,26 @@ def test_search_hybrid_single_channel_modes(monkeypatch) -> None:
     assert [hit["chunk_id"] for hit in vector_only.hits] == [1]
     assert vector_only.hits[0]["score"] == 0.9
     assert vector_only.trace["lexical"]["skipped"] is True
+    assert vector_only.trace["score_semantics"] == VECTOR_SEMANTICS
+
+
+def test_search_hybrid_lexical_only_marks_relative_semantics(monkeypatch) -> None:
+    monkeypatch.setattr(
+        hybrid_module.vector_store_service, "search", lambda kb_id, query, top_k: []
+    )
+    monkeypatch.setattr(
+        hybrid_module,
+        "search_lexical",
+        lambda db, kb_id, query, top_k: (
+            [_hit(1, 1.0), _hit(2, 0.5)],
+            {"returned": 2, "best": 1.0, "fallback": None},
+        ),
+    )
+
+    lexical_only = search_hybrid(object(), kb_id=1, query="测试", top_k=5, channels="hybrid")
+
+    assert [hit["chunk_id"] for hit in lexical_only.hits] == [1, 2]
+    assert lexical_only.trace["score_semantics"] == LEXICAL_SEMANTICS
 
 
 def test_search_hybrid_normalizes_unknown_channels(monkeypatch) -> None:

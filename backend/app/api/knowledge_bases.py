@@ -6,6 +6,7 @@ from pathlib import Path
 from app.core.database import get_db
 from app.core.db_utils import commit_or_conflict, get_knowledge_base_or_404, safe_commit
 from app.core.files import UPLOAD_ROOT, safe_unlink
+from app.core.pagination import Page, page_params
 from app.models.conversation import ChatMessage, Conversation
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
@@ -65,8 +66,12 @@ def create_knowledge_base(
 
 
 @router.get("", response_model=list[KnowledgeBaseRead])
-def list_knowledge_bases(db: Session = Depends(get_db)) -> list[KnowledgeBase]:
-    return list(db.scalars(select(KnowledgeBase).order_by(KnowledgeBase.id.desc())))
+def list_knowledge_bases(
+    page: Page = Depends(page_params),
+    db: Session = Depends(get_db),
+) -> list[KnowledgeBase]:
+    statement = select(KnowledgeBase).order_by(KnowledgeBase.id.desc())
+    return list(db.scalars(statement.offset(page.offset).limit(page.limit)))
 
 
 @router.get("/{kb_id}", response_model=KnowledgeBaseRead)

@@ -2,6 +2,9 @@ import re
 from pathlib import Path
 
 from docx import Document
+from docx.oxml.ns import qn
+from docx.table import Table
+from docx.text.paragraph import Paragraph
 from pptx import Presentation
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
@@ -52,20 +55,41 @@ def _parse_pdf(file_path: Path) -> str:
     return "\n\n".join(page_texts)
 
 
+def _table_row_texts(table: Table) -> list[str]:
+    rows: list[str] = []
+    for row in table.rows:
+        cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+        if cells:
+            rows.append(" | ".join(cells))
+    return rows
+
+
+def _iter_docx_body_items(document: Document):
+    """Yield top-level paragraphs and tables in true document order.
+
+    ``document.paragraphs`` and ``document.tables`` are separate lists that
+    lose the interleaving; iterating the body element keeps every table at its
+    original position between paragraphs. Cell paragraphs live inside the
+    table element, so they are never yielded (nor double-counted) here.
+    """
+    for child in document.element.body.iterchildren():
+        if child.tag == qn("w:p"):
+            yield Paragraph(child, document)
+        elif child.tag == qn("w:tbl"):
+            yield Table(child, document)
+
+
 def _parse_docx(file_path: Path) -> str:
     document = Document(str(file_path))
     parts: list[str] = []
 
-    for paragraph in document.paragraphs:
-        text = paragraph.text.strip()
-        if text:
-            parts.append(text)
-
-    for table in document.tables:
-        for row in table.rows:
-            cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-            if cells:
-                parts.append(" | ".join(cells))
+    for item in _iter_docx_body_items(document):
+        if isinstance(item, Paragraph):
+            text = item.text.strip()
+            if text:
+                parts.append(text)
+        else:
+            parts.extend(_table_row_texts(item))
 
     return "\n\n".join(parts)
 
@@ -240,17 +264,23 @@ def _parse_docx_structure(file_path: Path) -> ParsedDocument:
     def target() -> list[str]:
         return current if current is not None else lead_lines
 
-    for paragraph in document.paragraphs:
-        text = paragraph.text.strip()
+    for item in _iter_docx_body_items(document):
+        if isinstance(item, Table):
+            # Tables are inserted at their original position: rows land in the
+            # section that is currently open instead of being appended after
+            # every paragraph.
+            target().extend(_table_row_texts(item))
+            continue
+        text = item.text.strip()
         if not text:
             continue
         try:
-            style = paragraph.style
+            style = item.style
             style_name = style.name if style is not None else None
         except (AttributeError, KeyError):
             style_name = None
         level = match_heading_style(style_name)
-        if level is None and _is_heuristic_heading(paragraph):
+        if level is None and _is_heuristic_heading(item):
             level = 2
         if level is not None:
             if current is not None:
@@ -258,12 +288,6 @@ def _parse_docx_structure(file_path: Path) -> ParsedDocument:
             current, current_title, current_level = [], text, level
             continue
         target().append(text)
-
-    for table in document.tables:
-        for row in table.rows:
-            cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-            if cells:
-                target().append(" | ".join(cells))
 
     if current is not None:
         items.append((current_title, current_level, normalize_text("\n\n".join(current))))

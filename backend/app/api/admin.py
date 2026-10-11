@@ -1,5 +1,7 @@
+import json
 import logging
 import shutil
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -25,12 +27,16 @@ from app.services.settings_service import typed_settings, update_settings
 from app.services.vector_store_service import vector_store_service
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 logger = logging.getLogger(__name__)
+
+# Rows serialized per streamed batch; bounds peak memory for the export
+# regardless of table size.
+EXPORT_BATCH_ROWS = 200
 
 
 @router.get("/settings", response_model=SystemSettingsRead)
@@ -91,36 +97,92 @@ def get_system_status(db: Session = Depends(get_db)) -> SystemStatusRead:
 
 
 @router.get("/export")
-def export_all_data(db: Session = Depends(get_db)) -> JSONResponse:
-    payload = {
-        "version": 1,
-        "knowledge_bases": [_model_dict(item) for item in db.scalars(select(KnowledgeBase))],
-        "documents": [
-            _model_dict(item, exclude={"file_path"}) for item in db.scalars(select(Document))
-        ],
-        "chunks": [_model_dict(item) for item in db.scalars(select(DocumentChunk))],
-        "conversations": [_model_dict(item) for item in db.scalars(select(Conversation))],
-        "messages": [
-            {
-                **_model_dict(item, exclude={"sources_json"}),
-                "sources": load_json_column(item.sources_json, []),
-            }
-            for item in db.scalars(select(ChatMessage))
-        ],
-        "learning_records": [
-            {
-                **_model_dict(item, exclude={"tags_json", "metadata_json"}),
-                "tags": load_json_column(item.tags_json, []),
-                "metadata": load_json_column(item.metadata_json, {}),
-            }
-            for item in db.scalars(select(LearningRecord))
-        ],
-        "settings": {item.key: item.value for item in db.scalars(select(SystemSetting))},
-    }
-    return JSONResponse(
-        content=jsonable_encoder(payload),
+def export_all_data(db: Session = Depends(get_db)) -> StreamingResponse:
+    """Stream the full export as a single JSON object.
+
+    Rows are fetched with ``yield_per`` and serialized in batches, then
+    released from the session, so the payload never materializes in memory
+    and the response body has no size ceiling. The JSON shape (keys, row
+    fields, ordering) is identical to the pre-streaming export.
+    """
+    return StreamingResponse(
+        _export_stream(db),
+        media_type="application/json",
         headers={"Content-Disposition": 'attachment; filename="knowflow-export.json"'},
     )
+
+
+def _export_stream(db: Session) -> Iterator[str]:
+    yield '{"version":1,"knowledge_bases":'
+    yield from _stream_rows(db, select(KnowledgeBase), _encode_model)
+    yield ',"documents":'
+    yield from _stream_rows(db, select(Document), _encode_document)
+    yield ',"chunks":'
+    yield from _stream_rows(db, select(DocumentChunk), _encode_model)
+    yield ',"conversations":'
+    yield from _stream_rows(db, select(Conversation), _encode_model)
+    yield ',"messages":'
+    yield from _stream_rows(db, select(ChatMessage), _encode_message)
+    yield ',"learning_records":'
+    yield from _stream_rows(db, select(LearningRecord), _encode_learning_record)
+    yield ',"settings":'
+    yield from _stream_settings_object(db)
+    yield "}"
+
+
+def _stream_rows(
+    db: Session,
+    statement: Any,
+    encode: Callable[[Any], dict[str, Any]],
+) -> Iterator[str]:
+    """Yield a JSON array as batch-sized fragments while releasing each row."""
+    emitted = False
+    batch: list[str] = []
+    for row in db.scalars(statement).yield_per(EXPORT_BATCH_ROWS):
+        batch.append(json.dumps(encode(row), ensure_ascii=False, separators=(",", ":")))
+        db.expunge(row)
+        if len(batch) >= EXPORT_BATCH_ROWS:
+            yield ("[" if not emitted else ",") + ",".join(batch)
+            emitted = True
+            batch.clear()
+    if batch:
+        yield ("[" if not emitted else ",") + ",".join(batch)
+    elif not emitted:
+        yield "["
+    yield "]"
+
+
+def _stream_settings_object(db: Session) -> Iterator[str]:
+    batch: list[str] = []
+    for item in db.scalars(select(SystemSetting)).yield_per(EXPORT_BATCH_ROWS):
+        batch.append(
+            json.dumps(item.key, ensure_ascii=False)
+            + ":"
+            + json.dumps(item.value, ensure_ascii=False)
+        )
+        db.expunge(item)
+    yield "{" + ",".join(batch) + "}"
+
+
+def _encode_model(model: Any, exclude: set[str] | None = None) -> dict[str, Any]:
+    return jsonable_encoder(_model_dict(model, exclude))
+
+
+def _encode_document(model: Any) -> dict[str, Any]:
+    return _encode_model(model, exclude={"file_path"})
+
+
+def _encode_message(model: Any) -> dict[str, Any]:
+    payload = _model_dict(model, exclude={"sources_json"})
+    payload["sources"] = load_json_column(model.sources_json, [])
+    return jsonable_encoder(payload)
+
+
+def _encode_learning_record(model: Any) -> dict[str, Any]:
+    payload = _model_dict(model, exclude={"tags_json", "metadata_json"})
+    payload["tags"] = load_json_column(model.tags_json, [])
+    payload["metadata"] = load_json_column(model.metadata_json, {})
+    return jsonable_encoder(payload)
 
 
 @router.delete("/data", response_model=DataClearRead)

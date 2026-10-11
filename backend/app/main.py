@@ -11,11 +11,7 @@ from app.api.learning_records import router as learning_records_router
 from app.api.vector_search import router as vector_search_router
 from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
-from app.services.lexical_search import (
-    backfill_search_text,
-    ensure_chunk_columns,
-    ensure_lexical_index,
-)
+from app.core.migrations import run_migrations
 from app.services.startup_recovery import reconcile_orphan_vectors, recover_interrupted_documents
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,10 +36,8 @@ def create_app() -> FastAPI:
     )
 
     Base.metadata.create_all(bind=engine)
-    ensure_chunk_columns(engine)
-    ensure_lexical_index(engine)
+    run_migrations(engine)
     with SessionLocal() as db:
-        backfill_search_text(db)
         recover_interrupted_documents(db)
         if not _running_under_pytest():
             reconcile_orphan_vectors(db)
