@@ -22,7 +22,7 @@ import {
   listConversations,
 } from '../../api/client'
 import { getEvidencePanelState } from '../evidencePanelState'
-import { getApiErrorMessage, TASK_MODES } from '../productState'
+import { formatTokenUsage, getApiErrorMessage, TASK_MODES } from '../productState'
 import { formatChannelLabel, formatSourceSubtitle } from '../sourceFormat'
 
 const props = defineProps({
@@ -30,7 +30,7 @@ const props = defineProps({
   documentCount: { type: Number, default: 0 },
   resumeConversationId: { type: Number, default: null },
 })
-const emit = defineEmits(['conversation-resumed'])
+const emit = defineEmits(['conversation-resumed', 'open-knowledge'])
 
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true })
 const activeMode = ref('question')
@@ -74,7 +74,9 @@ async function loadConversation(id) {
     const { data } = await getConversation(id)
     if (data.kb_id !== props.course.id) return
     conversationId.value = data.id
-    messages.value = data.messages
+    messages.value = data.messages.map((message) =>
+      message.role === 'assistant' ? { ...message, usageText: formatTokenUsage(message) } : message,
+    )
     const assistant = [...data.messages].reverse().find((message) => message.role === 'assistant')
     sources.value = assistant?.sources || []
     selectedSourceId.value = sources.value[0]?.chunk_id ?? null
@@ -125,6 +127,7 @@ async function submitQuestion() {
       answer_mode: data.answer_mode,
       provider: data.provider,
       insufficient_evidence: data.insufficient_evidence,
+      usageText: formatTokenUsage(data.usage),
     })
     sources.value = data.sources || []
     selectedSourceId.value = sources.value[0]?.chunk_id ?? null
@@ -170,7 +173,7 @@ async function saveLearningRecord(type) {
 
 function prepareExercise() {
   activeMode.value = 'exercise'
-  question.value = '根据当前课程资料生成 3 道练习题，并提供参考答案。'
+  question.value = '根据当前知识库中的资料生成 3 道练习题，并提供参考答案。'
 }
 
 function openSelectedSource() {
@@ -206,9 +209,9 @@ watch(
     <section class="conversation-pane">
       <header class="conversation-header">
         <div>
-          <span class="eyebrow">当前课程</span>
+          <span class="eyebrow">当前知识库</span>
           <h1>{{ course.name }}</h1>
-          <p>基于 {{ documentCount }} 份课程资料回答，关键结论将标注原文引用。</p>
+          <p>基于 {{ documentCount }} 份资料回答，关键结论将标注原文引用。</p>
         </div>
         <button class="new-chat-button glass-control" type="button" @click="newChat">
           <el-icon><EditPen /></el-icon><span>新对话</span>
@@ -224,8 +227,8 @@ watch(
       <div ref="conversationScroll" class="conversation-scroll">
         <div v-if="!messages.length" class="assistant-empty">
           <span class="assistant-mark"><el-icon><MagicStick /></el-icon></span>
-          <strong>从课程资料开始学习</strong>
-          <p>提问一个概念，或选择上方任务模式生成总结、对比和练习。</p>
+          <strong>从知识库资料开始提问</strong>
+          <p>输入一个问题，或选择上方任务模式生成总结、对比和练习。</p>
         </div>
 
         <article v-for="message in messages" :key="message.id" :class="['message', message.role === 'user' ? 'user-message' : 'assistant-message', { 'message-error': message.error }]">
@@ -239,6 +242,7 @@ watch(
             </header>
             <div class="answer-content markdown-answer" v-html="renderMarkdown(message.content)"></div>
             <footer v-if="!message.error && message === lastAssistantMessage" class="answer-actions">
+              <span v-if="message.usageText" class="usage-note">{{ message.usageText }}</span>
               <button type="button" @click="saveLearningRecord('note')"><el-icon><Notebook /></el-icon>存为笔记</button>
               <button type="button" @click="saveLearningRecord('exercise')"><el-icon><Tickets /></el-icon>保存练习</button>
               <button type="button" @click="sourcePanelOpen = true"><el-icon><Document /></el-icon>查看检索依据</button>
@@ -247,7 +251,7 @@ watch(
         </article>
 
         <article v-if="sending" class="message assistant-message answer-loading" aria-live="polite">
-          <header class="assistant-author"><span class="assistant-mark"><el-icon><MagicStick /></el-icon></span><span><strong>KnowFlow</strong><em>正在检索课程资料</em></span></header>
+          <header class="assistant-author"><span class="assistant-mark"><el-icon><MagicStick /></el-icon></span><span><strong>KnowFlow</strong><em>正在检索知识库资料</em></span></header>
           <span></span><span></span><span></span>
         </article>
       </div>
@@ -255,14 +259,14 @@ watch(
       <section class="composer glass-surface">
         <textarea v-model="question" rows="2" :placeholder="composerPlaceholder" :disabled="sending" @keydown.ctrl.enter.prevent="submitQuestion"></textarea>
         <div class="composer-footer">
-          <div class="composer-context"><button type="button"><el-icon><Collection /></el-icon>全部资料</button><span>{{ sources.length || '尚未' }} 个命中片段</span></div>
+          <div class="composer-context"><button type="button" @click="emit('open-knowledge')"><el-icon><Collection /></el-icon>全部资料</button><span>{{ sources.length || '暂无' }} 个命中片段</span></div>
           <button class="send-button" type="button" :disabled="!question.trim() || sending" aria-label="发送问题" @click="submitQuestion"><el-icon><ArrowUp /></el-icon></button>
         </div>
       </section>
 
       <div class="suggestion-row">
         <span>继续探索</span>
-        <button type="button" @click="question = '窄依赖和宽依赖如何影响故障恢复？'">比较窄依赖与宽依赖</button>
+        <button type="button" @click="question = '请根据知识库中的资料，总结核心要点与关键结论。'">总结知识库要点</button>
         <button type="button" @click="prepareExercise">生成 3 道练习题</button>
       </div>
     </section>
@@ -282,7 +286,7 @@ watch(
         <div v-if="sources.length" class="source-list">
           <button v-for="(source, index) in sources" :key="source.chunk_id" type="button" :class="['source-item', { active: selectedSourceId === source.chunk_id }]" @click="selectedSourceId = source.chunk_id">
             <span class="source-index">{{ index + 1 }}</span>
-            <span class="source-copy"><strong>{{ source.document_title || source.file_name || '课程资料' }}</strong><em>{{ formatSourceSubtitle(source) }}</em></span>
+            <span class="source-copy"><strong>{{ source.document_title || source.file_name || '知识库资料' }}</strong><em>{{ formatSourceSubtitle(source) }}</em></span>
             <span class="source-score">{{ Math.round(source.score * 100) }}%</span>
             <p>{{ source.content }}</p>
           </button>

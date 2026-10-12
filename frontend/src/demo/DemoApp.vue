@@ -22,8 +22,8 @@ import RecordsView from './views/RecordsView.vue'
 import SettingsView from './views/SettingsView.vue'
 
 const navItems = [
-  { id: 'assistant', label: '课程助手', icon: Reading },
-  { id: 'knowledge', label: '课程知识库', icon: FolderOpened },
+  { id: 'assistant', label: '知识助手', icon: Reading },
+  { id: 'knowledge', label: '知识库', icon: FolderOpened },
   { id: 'records', label: '学习记录', icon: Notebook },
   { id: 'settings', label: '设置', icon: Setting },
 ]
@@ -59,22 +59,22 @@ async function selectCourseAndCloseNav(id) {
 
 async function createCourse() {
   try {
-    const { value } = await ElMessageBox.prompt('为课程知识库命名，例如“大数据原理”。', '新建课程', {
+    const { value } = await ElMessageBox.prompt('为知识库命名，例如“产品手册”。', '新建知识库', {
       confirmButtonText: '创建',
       cancelButtonText: '取消',
-      inputPlaceholder: '课程名称',
+      inputPlaceholder: '知识库名称',
       inputPattern: /\S+/,
-      inputErrorMessage: '请输入课程名称',
+      inputErrorMessage: '请输入知识库名称',
     })
-    const { data } = await createKnowledgeBase({ name: value.trim(), description: '', category: '课程' })
+    const { data } = await createKnowledgeBase({ name: value.trim(), description: '', category: '' })
     await loadApplication()
     await selectCourseAndCloseNav(data.id)
     activeView.value = 'knowledge'
     syncHash()
-    ElMessage.success('课程已创建，现在可以导入资料。')
+    ElMessage.success('知识库已创建，现在可以导入资料。')
   } catch (error) {
     if (error === 'cancel' || error === 'close') return
-    ElMessage.error(getApiErrorMessage(error, '创建课程失败。'))
+    ElMessage.error(getApiErrorMessage(error, '创建知识库失败。'))
   }
 }
 
@@ -91,6 +91,10 @@ function openAssistant(conversationId = null) {
 
 function handleDocumentsUpdated(list) {
   documents.value = list
+}
+
+function handleKnowledgeBaseChanged() {
+  loadApplication()
 }
 
 function syncHash() {
@@ -122,13 +126,13 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncViewFromHash)
         <el-icon><Menu /></el-icon>
       </button>
       <div class="mobile-brand"><span>K</span><strong>KnowFlow</strong></div>
-      <button class="icon-button glass-control" type="button" aria-label="新建课程" @click="createCourse"><el-icon><Plus /></el-icon></button>
+      <button class="icon-button glass-control" type="button" aria-label="新建知识库" @click="createCourse"><el-icon><Plus /></el-icon></button>
     </header>
 
     <button v-if="mobileNavOpen" class="mobile-scrim" type="button" aria-label="关闭导航" @click="mobileNavOpen = false"></button>
 
     <aside :class="['sidebar', 'glass-surface', { 'is-open': mobileNavOpen }]">
-      <div class="brand-lockup"><div class="brand-symbol">K</div><div><strong>KnowFlow</strong><span>课程知识工作台</span></div></div>
+      <div class="brand-lockup"><div class="brand-symbol">K</div><div><strong>KnowFlow</strong><span>知识工作台</span></div></div>
 
       <nav class="primary-nav" aria-label="主导航">
         <button v-for="item in navItems" :key="item.id" type="button" :class="['nav-item', { active: activeView === item.id }]" @click="selectView(item.id)">
@@ -137,12 +141,12 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncViewFromHash)
       </nav>
 
       <section class="course-switcher">
-        <div class="section-label-row"><span class="section-label">我的课程</span><button class="tiny-action" type="button" aria-label="新建课程" title="新建课程" @click="createCourse"><el-icon><Plus /></el-icon></button></div>
+        <div class="section-label-row"><span class="section-label">我的知识库</span><button class="tiny-action" type="button" aria-label="新建知识库" title="新建知识库" @click="createCourse"><el-icon><Plus /></el-icon></button></div>
         <button v-for="course in knowledgeBases" :key="course.id" type="button" :class="['course-item', { active: selectedKbId === course.id }]" @click="selectCourseAndCloseNav(course.id)">
           <span :class="['course-mark', `tone-${['green', 'blue', 'amber'][course.id % 3]}`]"></span>
-          <span><strong>{{ course.name }}</strong><em>{{ selectedKbId === course.id ? getCourseMeta(documents) : course.category || '课程知识库' }}</em></span>
+          <span><strong>{{ course.name }}</strong><em>{{ selectedKbId === course.id ? getCourseMeta(documents) : course.category || '知识库' }}</em></span>
         </button>
-        <button v-if="!knowledgeBases.length && !loading" class="empty-course-action" type="button" @click="createCourse"><el-icon><Plus /></el-icon><span>创建第一门课程</span></button>
+        <button v-if="!knowledgeBases.length && !loading" class="empty-course-action" type="button" @click="createCourse"><el-icon><Plus /></el-icon><span>创建第一个知识库</span></button>
       </section>
 
       <footer class="sidebar-footer">
@@ -156,19 +160,19 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncViewFromHash)
         <div class="breadcrumb"><span>{{ selectedCourse?.name || 'KnowFlow' }}</span><span class="slash">/</span><strong>{{ activeNavItem?.label }}</strong></div>
         <div class="toolbar-actions">
           <button class="search-trigger glass-control" type="button" @click="selectView('knowledge')"><el-icon><Search /></el-icon><span>搜索资料</span></button>
-          <button class="icon-button glass-control" type="button" aria-label="新建课程" title="新建课程" @click="createCourse"><el-icon><Plus /></el-icon></button>
+          <button class="icon-button glass-control" type="button" aria-label="新建知识库" title="新建知识库" @click="createCourse"><el-icon><Plus /></el-icon></button>
           <button class="icon-button glass-control" type="button" aria-label="设置" title="设置" @click="selectView('settings')"><el-icon><MoreFilled /></el-icon></button>
         </div>
       </header>
 
       <div v-if="loading" class="app-loading"><span></span><strong>正在载入本地学习空间</strong></div>
       <section v-else-if="!selectedCourse" class="app-empty">
-        <span class="brand-symbol">K</span><h1>建立你的第一门课程</h1><p>先创建课程，再导入 PDF、PPTX、DOCX、Markdown 或文本资料。</p>
-        <button class="primary-action glass-control" type="button" @click="createCourse"><el-icon><Plus /></el-icon>新建课程</button>
+        <span class="brand-symbol">K</span><h1>建立你的第一个知识库</h1><p>先创建知识库，再导入 PDF、PPTX、DOCX、Markdown 或文本资料。</p>
+        <button class="primary-action glass-control" type="button" @click="createCourse"><el-icon><Plus /></el-icon>新建知识库</button>
       </section>
       <template v-else>
-        <AssistantView v-if="activeView === 'assistant'" :course="selectedCourse" :document-count="documents.length" :resume-conversation-id="resumeConversationId" @conversation-resumed="resumeConversationId = null" />
-        <KnowledgeView v-else-if="activeView === 'knowledge'" :course="selectedCourse" @documents-updated="handleDocumentsUpdated" />
+        <AssistantView v-if="activeView === 'assistant'" :course="selectedCourse" :document-count="documents.length" :resume-conversation-id="resumeConversationId" @conversation-resumed="resumeConversationId = null" @open-knowledge="selectView('knowledge')" />
+        <KnowledgeView v-else-if="activeView === 'knowledge'" :course="selectedCourse" @documents-updated="handleDocumentsUpdated" @knowledge-base-changed="handleKnowledgeBaseChanged" />
         <RecordsView v-else-if="activeView === 'records'" :course="selectedCourse" @open-assistant="openAssistant" />
         <SettingsView v-else :initial-settings="settings" :provider-status="providerStatus" :glass-variant="glassVariant" @saved="handleSettingsSaved" @update:glass-variant="glassVariant = $event" @data-cleared="loadApplication" />
       </template>

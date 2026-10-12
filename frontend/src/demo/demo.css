@@ -838,3 +838,12 @@ textarea:focus-visible {
     backdrop-filter: none;
   }
 }
+
+.usage-note {
+  display: flex;
+  align-items: center;
+  height: 29px;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 9px;
+}

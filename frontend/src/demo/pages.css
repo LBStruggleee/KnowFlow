@@ -1007,3 +1007,61 @@
 @keyframes knowflow-spin {
   to { transform: rotate(360deg); }
 }
+
+.library-overview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.library-admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chunk-list {
+  margin-top: 14px;
+}
+
+.chunk-list p {
+  margin: 0;
+  padding: 8px 9px;
+  border-radius: 7px;
+  font-size: 9px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chunk-list p:hover {
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.chunk-list p em {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 8px;
+  font-style: normal;
+}
+
+.chunk-loading {
+  padding: 4px 9px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.row-actions .el-dropdown {
+  display: inline-grid;
+}
+
+.section-label em {
+  margin-left: 4px;
+  color: var(--muted);
+  font-style: normal;
+}

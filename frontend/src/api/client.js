@@ -1,7 +1,11 @@
 import axios from 'axios'
 
+// Same-origin by default: the dev server proxies '/api' to the backend
+// (vite.config.js server.proxy) and production serves the SPA from the
+// backend itself. VITE_API_BASE still overrides it with a full origin such
+// as 'http://127.0.0.1:8000' for direct backend connections.
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000',
+  baseURL: import.meta.env.VITE_API_BASE || '',
   timeout: 60000,
 })
 
@@ -16,6 +20,10 @@ function paginationParams({ limit, offset } = {}) {
   if (limit !== undefined) params.limit = limit
   if (offset !== undefined) params.offset = offset
   return params
+}
+
+export function getKnowledgeBase(kbId) {
+  return api.get(`/api/kbs/${kbId}`)
 }
 
 export function listKnowledgeBases(page = {}) {
@@ -69,6 +77,10 @@ export function listDocumentChunks(documentId, page = {}) {
   return api.get(`/api/documents/${documentId}/chunks`, { params: paginationParams(page) })
 }
 
+export function listDocumentSections(documentId, page = {}) {
+  return api.get(`/api/documents/${documentId}/sections`, { params: paginationParams(page) })
+}
+
 export function askQuestion(payload) {
   return api.post('/api/chat', payload)
 }
@@ -105,6 +117,10 @@ export function updateSystemSettings(payload) {
 
 export function getProviderStatus() {
   return api.get('/api/admin/providers')
+}
+
+export function getLearningRecord(recordId) {
+  return api.get(`/api/learning-records/${recordId}`)
 }
 
 export function listLearningRecords(kbId, recordType, page = {}) {

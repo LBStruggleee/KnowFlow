@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Delete,
   Document,
+  EditPen,
   FolderOpened,
   MoreFilled,
   Plus,
@@ -15,16 +16,26 @@ import {
 } from '@element-plus/icons-vue'
 import {
   deleteDocument,
+  deleteKnowledgeBase,
   getDocumentFileUrl,
+  listDocumentChunks,
   listDocuments,
   rebuildKnowledgeBaseIndex,
   retryDocument,
+  updateKnowledgeBase,
   uploadDocument,
 } from '../../api/client'
-import { formatDate, getApiErrorMessage, getDocumentPollDelay, mapDocument } from '../productState'
+import {
+  formatDate,
+  getApiErrorMessage,
+  getDocumentPollDelay,
+  mapDocument,
+  truncatePreview,
+  validateUploadFile,
+} from '../productState'
 
 const props = defineProps({ course: { type: Object, required: true } })
-const emit = defineEmits(['documents-updated'])
+const emit = defineEmits(['documents-updated', 'knowledge-base-changed'])
 
 const documents = ref([])
 const activeTab = ref('documents')
@@ -62,6 +73,30 @@ const processingDocuments = computed(() =>
 )
 const failedDocuments = computed(() => documents.value.filter((document) => document.status === 'failed'))
 
+// Chunk preview in the document inspector (evaluation I-02): show the first
+// parsed chunks of the selected document. The backend default page limit is
+// 100; a small explicit limit keeps the inspector lightweight.
+const CHUNK_PREVIEW_LIMIT = 10
+const chunks = ref([])
+const chunksLoading = ref(false)
+
+async function loadChunks() {
+  const documentId = selectedDocument.value?.id
+  if (!documentId) {
+    chunks.value = []
+    return
+  }
+  chunksLoading.value = true
+  try {
+    chunks.value = (await listDocumentChunks(documentId, { limit: CHUNK_PREVIEW_LIMIT })).data
+  } catch (error) {
+    chunks.value = []
+    ElMessage.error(getApiErrorMessage(error, '无法读取解析片段。'))
+  } finally {
+    chunksLoading.value = false
+  }
+}
+
 function statusLabel(status) {
   return { ready: '已入库', processing: '处理中', pending: '等待处理', failed: '失败' }[status] || status
 }
@@ -93,7 +128,7 @@ async function loadDocuments() {
     }
     emit('documents-updated', data)
   } catch (error) {
-    ElMessage.error(getApiErrorMessage(error, '无法读取课程资料。'))
+    ElMessage.error(getApiErrorMessage(error, '无法读取知识库资料。'))
   }
   schedulePoll()
 }
@@ -102,6 +137,13 @@ async function handleFileSelected(event) {
   const file = event.target.files?.[0]
   event.target.value = ''
   if (!file) return
+  // Pre-flight checks (evaluation I-21): reject unsupported types and
+  // oversized files locally so a doomed upload never leaves the browser.
+  const validation = validateUploadFile(file)
+  if (!validation.ok) {
+    ElMessage.warning(validation.reason)
+    return
+  }
   isUploading.value = true
   uploadProgress.value = 0
   uploadStage.value = '正在上传'
@@ -159,11 +201,50 @@ async function rebuildIndex() {
   }
 }
 
+async function renameKnowledgeBase() {
+  try {
+    const { value } = await ElMessageBox.prompt(`修改“${props.course.name}”的名称。`, '重命名知识库', {
+      confirmButtonText: '保存', cancelButtonText: '取消',
+      inputPlaceholder: '知识库名称', inputValue: props.course.name,
+      inputPattern: /\S+/, inputErrorMessage: '请输入知识库名称',
+    })
+    await updateKnowledgeBase(props.course.id, { name: value.trim() })
+    ElMessage.success('知识库已重命名')
+    emit('knowledge-base-changed')
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(getApiErrorMessage(error, '重命名知识库失败。'))
+  }
+}
+
+async function removeKnowledgeBase() {
+  try {
+    await ElMessageBox.confirm(
+      `删除“${props.course.name}”将同时删除其中的全部资料、解析片段、会话与学习记录，且不可恢复。确认删除？`,
+      '删除知识库',
+      { confirmButtonText: '删除知识库', cancelButtonText: '取消', type: 'warning' },
+    )
+    await deleteKnowledgeBase(props.course.id)
+    ElMessage.success('知识库已删除')
+    emit('knowledge-base-changed')
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(getApiErrorMessage(error, '删除知识库失败。'))
+  }
+}
+
+function handleRowCommand(command, document) {
+  if (command === 'chunks') selectedDocumentId.value = document.id
+  else if (command === 'open') openOriginal(document)
+  else if (command === 'delete') removeItem(document)
+}
+
 function openOriginal(document) {
   window.open(getDocumentFileUrl(document.id), '_blank', 'noopener,noreferrer')
 }
 
 watch(() => props.course.id, loadDocuments, { immediate: true })
+watch(() => selectedDocument.value?.id, loadChunks, { immediate: true })
 watch(filteredDocuments, (items) => {
   if (!items.some((item) => item.id === selectedDocumentId.value)) selectedDocumentId.value = items[0]?.id ?? null
 })
@@ -179,14 +260,18 @@ onBeforeUnmount(() => {
   <section class="product-view knowledge-view">
     <input ref="fileInput" class="visually-hidden" type="file" accept=".txt,.md,.pdf,.docx,.pptx" @change="handleFileSelected" />
     <header class="view-header">
-      <div><span class="eyebrow">Course Library</span><h1>课程知识库</h1><p>管理 {{ course.name }} 的原始资料、解析状态和可检索片段。</p></div>
+      <div><span class="eyebrow">Knowledge Library</span><h1>知识库</h1><p>管理 {{ course.name }} 的原始资料、解析状态和可检索片段。</p></div>
       <button class="primary-action glass-control" type="button" :aria-label="isUploading ? uploadStage : '导入资料'" :disabled="isUploading" @click="fileInput?.click()"><el-icon><Upload /></el-icon><span>{{ isUploading ? `${uploadStage} ${uploadProgress}%` : '导入资料' }}</span></button>
     </header>
 
     <div class="library-overview glass-surface">
-      <div><span class="eyebrow">当前课程</span><strong>{{ course.name }}</strong><p>{{ course.description || '围绕课程资料建立可追溯的问答与学习记录。' }}</p></div>
+      <div><span class="eyebrow">当前知识库</span><strong>{{ course.name }}</strong><p>{{ course.description || '围绕知识库资料建立可追溯的问答与学习记录。' }}</p></div>
       <div class="library-stats"><span><strong>{{ documents.length }}</strong><em>份资料</em></span><span><strong>{{ documents.reduce((sum, item) => sum + item.chunks, 0) }}</strong><em>个片段</em></span><span><strong>{{ failedDocuments.length }}</strong><em>项待处理</em></span></div>
-      <button class="secondary-action glass-control" type="button" :disabled="isRebuilding || !documents.length" @click="rebuildIndex"><el-icon><Refresh /></el-icon>{{ isRebuilding ? '重建中' : '重建索引' }}</button>
+      <div class="library-admin-actions">
+        <button class="secondary-action glass-control" type="button" :disabled="isRebuilding || !documents.length" @click="rebuildIndex"><el-icon><Refresh /></el-icon>{{ isRebuilding ? '重建中' : '重建索引' }}</button>
+        <button class="icon-button glass-control" type="button" aria-label="重命名知识库" title="重命名知识库" @click="renameKnowledgeBase"><el-icon><EditPen /></el-icon></button>
+        <button class="danger-icon-button" type="button" aria-label="删除知识库" title="删除知识库" @click="removeKnowledgeBase"><el-icon><Delete /></el-icon></button>
+      </div>
     </div>
 
     <div class="knowledge-tabs segmented-control"><button type="button" :class="{ active: activeTab === 'documents' }" @click="activeTab = 'documents'">资料</button><button type="button" :class="{ active: activeTab === 'jobs' }" @click="activeTab = 'jobs'">处理任务 <span v-if="processingDocuments.length">{{ processingDocuments.length }}</span></button></div>
@@ -198,9 +283,21 @@ onBeforeUnmount(() => {
         <button v-for="document in filteredDocuments" :key="document.id" type="button" :class="['document-row', { active: selectedDocumentId === document.id }]" @click="selectedDocumentId = document.id">
           <span class="document-name"><i :class="`file-${document.type.toLowerCase()}`">{{ document.type.slice(0, 1) }}</i><span><strong>{{ document.name }}</strong><em>{{ document.type }} · {{ document.size }}</em></span></span>
           <span :class="['document-status', `status-${document.status}`]"><i></i>{{ statusLabel(document.status) }}</span><span>{{ document.chunks || '-' }}</span><span>{{ document.updatedAt }}</span>
-          <span class="row-actions"><button v-if="document.status === 'failed'" type="button" aria-label="重试解析" title="重试解析" @click.stop="retryItem(document)"><el-icon><RefreshRight /></el-icon></button><button type="button" aria-label="更多操作" title="更多操作"><el-icon><MoreFilled /></el-icon></button></span>
+          <span class="row-actions">
+            <button v-if="document.status === 'failed'" type="button" aria-label="重试解析" title="重试解析" @click.stop="retryItem(document)"><el-icon><RefreshRight /></el-icon></button>
+            <el-dropdown trigger="click" @command="(command) => handleRowCommand(command, document)">
+              <button type="button" aria-label="更多操作" title="更多操作" @click.stop><el-icon><MoreFilled /></el-icon></button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="chunks">查看解析片段</el-dropdown-item>
+                  <el-dropdown-item command="open">打开原始资料</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided>删除资料</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </span>
         </button>
-        <div v-if="!filteredDocuments.length" class="inline-empty"><el-icon><FolderOpened /></el-icon><strong>{{ documents.length ? '没有匹配的资料' : '课程还没有资料' }}</strong><span>{{ documents.length ? '修改筛选条件后再试。' : '导入课程材料后即可检索和问答。' }}</span><button v-if="!documents.length" type="button" @click="fileInput?.click()"><el-icon><Plus /></el-icon>导入第一份资料</button></div>
+        <div v-if="!filteredDocuments.length" class="inline-empty"><el-icon><FolderOpened /></el-icon><strong>{{ documents.length ? '没有匹配的资料' : '知识库还没有资料' }}</strong><span>{{ documents.length ? '修改筛选条件后再试。' : '导入资料后即可检索和问答。' }}</span><button v-if="!documents.length" type="button" @click="fileInput?.click()"><el-icon><Plus /></el-icon>导入第一份资料</button></div>
       </section>
 
       <aside v-if="selectedDocument" class="document-inspector glass-surface">
@@ -208,6 +305,14 @@ onBeforeUnmount(() => {
         <span class="inspector-file-icon"><el-icon><Document /></el-icon></span><h3>{{ selectedDocument.name }}</h3><p>{{ selectedDocument.type }} · {{ selectedDocument.size }} · {{ selectedDocument.chunks }} 个片段</p>
         <dl><div><dt>处理状态</dt><dd>{{ statusLabel(selectedDocument.status) }}</dd></div><div><dt>内容长度</dt><dd>{{ selectedDocument.content_length || 0 }} 字符</dd></div><div><dt>最近更新</dt><dd>{{ formatDate(selectedDocument.updated_at) }}</dd></div></dl>
         <div v-if="selectedDocument.outline.length" class="outline-list"><span class="section-label">内容预览</span><p v-for="(line, index) in selectedDocument.outline" :key="index">{{ line }}</p></div>
+        <div class="outline-list chunk-list">
+          <span class="section-label">解析片段预览<em v-if="selectedDocument.chunks > chunks.length && !chunksLoading">（前 {{ chunks.length }} / {{ selectedDocument.chunks }} 块）</em></span>
+          <div v-if="chunksLoading" class="chunk-loading">正在读取解析片段…</div>
+          <div v-else-if="!chunks.length" class="chunk-loading">{{ selectedDocument.chunks ? '暂未获取到解析片段。' : '解析完成后即可查看片段。' }}</div>
+          <template v-else>
+            <p v-for="chunk in chunks" :key="chunk.id" class="chunk-item"><em>#{{ chunk.chunk_index }} · {{ chunk.token_count }} tokens</em>{{ truncatePreview(chunk.content) }}</p>
+          </template>
+        </div>
         <div v-if="selectedDocument.error_message" class="document-error"><strong>处理失败</strong><p>{{ selectedDocument.error_message }}</p></div>
         <div class="inspector-actions"><button v-if="selectedDocument.status === 'failed'" class="secondary-action glass-control" type="button" @click="retryItem(selectedDocument)"><el-icon><RefreshRight /></el-icon>重新解析</button><button class="danger-icon-button" type="button" aria-label="删除资料" title="删除资料" @click="removeItem(selectedDocument)"><el-icon><Delete /></el-icon></button></div>
       </aside>

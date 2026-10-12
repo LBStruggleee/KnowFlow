@@ -14,6 +14,46 @@ export function formatBytes(bytes) {
   return `${(size / 1024 ** 2).toFixed(1)} MB`
 }
 
+// Must stay aligned with the backend upload limit (UPLOAD_MAX_BYTES,
+// backend/app/core/config.py defaults to 50 MB) and SUPPORTED_FILE_TYPES
+// (backend/app/services/document_parser.py) so rejected uploads never make
+// a doomed round trip (evaluation I-21).
+export const UPLOAD_MAX_BYTES = 50 * 1024 * 1024
+export const SUPPORTED_UPLOAD_EXTENSIONS = ['.txt', '.md', '.pdf', '.docx', '.pptx']
+
+export function validateUploadFile(
+  file,
+  { maxBytes = UPLOAD_MAX_BYTES, allowedExtensions = SUPPORTED_UPLOAD_EXTENSIONS } = {},
+) {
+  const name = file?.name || ''
+  const extension = name.slice(name.lastIndexOf('.')).toLowerCase()
+  if (!allowedExtensions.includes(extension)) {
+    return { ok: false, reason: `暂不支持该文件类型，仅支持 ${allowedExtensions.join('、')}` }
+  }
+  if ((file?.size || 0) <= 0) return { ok: false, reason: '文件内容为空，无法解析。' }
+  if (file.size > maxBytes) {
+    return { ok: false, reason: `文件超过大小上限（最大 ${formatBytes(maxBytes)}），请压缩后再上传。` }
+  }
+  return { ok: true, reason: '' }
+}
+
+// Cloud answers carry token usage (ChatResponse.usage); local extractive
+// answers have none, in which case the label stays empty and is hidden.
+export function formatTokenUsage(usage) {
+  const total = Number(usage?.total_tokens)
+  if (!Number.isFinite(total) || total <= 0) return ''
+  const prompt = Number(usage?.prompt_tokens) || 0
+  const completion = Number(usage?.completion_tokens) || 0
+  return `输入 ${prompt} · 输出 ${completion} · 共 ${total} tokens`
+}
+
+// Inspector surfaces show truncated chunk bodies; full text stays available
+// through the original file.
+export function truncatePreview(text, max = 260) {
+  const value = String(text || '')
+  return value.length > max ? `${value.slice(0, max)}…` : value
+}
+
 export function formatDate(value) {
   if (!value) return '刚刚'
   const date = new Date(value)

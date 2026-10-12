@@ -45,7 +45,7 @@ export function useWorkbenchState() {
       documents.value = (await listDocuments(selectedKbId.value)).data
     } catch (error) {
       documents.value = []
-      ElMessage.error(getApiErrorMessage(error, '无法读取课程资料。'))
+      ElMessage.error(getApiErrorMessage(error, '无法读取知识库资料。'))
     }
   }
 

@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   combineLearningRecords,
   formatBytes,
+  formatTokenUsage,
   getApiErrorMessage,
   getCourseMeta,
   getDocumentPollDelay,
   mapDocument,
   TASK_MODES,
+  truncatePreview,
+  UPLOAD_MAX_BYTES,
+  validateUploadFile,
 } from './productState'
 
 describe('product state mapping', () => {
@@ -64,5 +68,80 @@ describe('product state mapping', () => {
     expect(getDocumentPollDelay(-5)).toBe(1600)
     expect(getDocumentPollDelay(undefined)).toBe(1600)
     expect(getDocumentPollDelay(Number.NaN)).toBe(1600)
+  })
+
+  it('metadata.reviewed 让学习记录展示为已复习', () => {
+    const result = combineLearningRecords(
+      [],
+      [
+        {
+          id: 5,
+          record_type: 'note',
+          title: '笔记',
+          content: '内容',
+          tags: [],
+          metadata: { reviewed: true },
+          updated_at: '2026-01-03T00:00:00Z',
+        },
+      ],
+      '知识库',
+    )
+    expect(result[0].meta).toBe('已复习')
+  })
+})
+
+describe('upload pre-validation (evaluation I-21)', () => {
+  it('接受受支持扩展名且大小在上限内的文件', () => {
+    expect(validateUploadFile({ name: 'notes.md', size: 2048 })).toEqual({ ok: true, reason: '' })
+    expect(validateUploadFile({ name: '报告.PDF', size: UPLOAD_MAX_BYTES })).toEqual({
+      ok: true,
+      reason: '',
+    })
+  })
+
+  it('拒绝不支持的扩展名、无扩展名与双扩展名伪装', () => {
+    expect(validateUploadFile({ name: 'evil.exe', size: 10 }).ok).toBe(false)
+    expect(validateUploadFile({ name: 'README', size: 10 }).ok).toBe(false)
+    expect(validateUploadFile({ name: 'report.pdf.exe', size: 10 }).ok).toBe(false)
+  })
+
+  it('拒绝空文件', () => {
+    expect(validateUploadFile({ name: 'empty.txt', size: 0 }).ok).toBe(false)
+  })
+
+  it('拒绝超过上限的文件，并提示与后端一致的上限', () => {
+    const result = validateUploadFile({ name: 'big.pdf', size: UPLOAD_MAX_BYTES + 1 })
+    expect(result.ok).toBe(false)
+    expect(result.reason).toContain('50.0 MB')
+  })
+
+  it('允许调用方覆盖上限参数', () => {
+    expect(validateUploadFile({ name: 'a.md', size: 100 }, { maxBytes: 50 }).ok).toBe(false)
+  })
+})
+
+describe('token usage label (evaluation R-06)', () => {
+  it('云端回答生成可读的 token 摘要', () => {
+    expect(
+      formatTokenUsage({ prompt_tokens: 800, completion_tokens: 434, total_tokens: 1234 }),
+    ).toBe('输入 800 · 输出 434 · 共 1234 tokens')
+  })
+
+  it('本地回答无 usage 时返回空串（调用方据此隐藏）', () => {
+    expect(formatTokenUsage(null)).toBe('')
+    expect(formatTokenUsage(undefined)).toBe('')
+    expect(formatTokenUsage({})).toBe('')
+    expect(formatTokenUsage({ total_tokens: 0 })).toBe('')
+  })
+})
+
+describe('chunk preview truncation', () => {
+  it('超过上限时截断并追加省略号，短文本与空值原样返回', () => {
+    expect(truncatePreview('短文本')).toBe('短文本')
+    expect(truncatePreview('')).toBe('')
+    expect(truncatePreview(null)).toBe('')
+    const long = 'a'.repeat(261)
+    expect(truncatePreview(long)).toBe(`${'a'.repeat(260)}…`)
+    expect(truncatePreview('b'.repeat(500), 10)).toBe(`${'b'.repeat(10)}…`)
   })
 })

@@ -1,6 +1,6 @@
 # KnowFlow Demo Brand Spec
 
-- Product: KnowFlow, a private course knowledge-base agent for big-data learning.
+- Product: KnowFlow, a private knowledge-base agent for organizing personal documents and answering questions grounded in them.
 - Mark: the accepted v0 uses a provisional code-native `K` monogram and the KnowFlow wordmark. A final production logo asset is still pending.
 - Primary ink: `#18211d`.
 - Semantic accents: green for trustworthy/local, blue for evidence, amber for attention and learning progress.

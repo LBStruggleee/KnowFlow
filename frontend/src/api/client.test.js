@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockApi = vi.hoisted(() => ({
-  defaults: { baseURL: 'http://127.0.0.1:8000' },
+  defaults: { baseURL: '' },
   get: vi.fn().mockResolvedValue({ data: {} }),
   post: vi.fn().mockResolvedValue({ data: {} }),
   patch: vi.fn().mockResolvedValue({ data: {} }),
@@ -9,20 +9,33 @@ const mockApi = vi.hoisted(() => ({
 }))
 
 vi.mock('axios', () => ({
-  default: { create: vi.fn(() => mockApi) },
+  default: {
+    create: vi.fn((config) => {
+      mockApi.defaults.baseURL = config?.baseURL ?? ''
+      return mockApi
+    }),
+  },
 }))
 
 import {
   listConversations,
   listKnowledgeBases,
+  getKnowledgeBase,
+  updateKnowledgeBase,
+  deleteKnowledgeBase,
+  rebuildKnowledgeBaseIndex,
   listDocuments,
   listDocumentChunks,
+  listDocumentSections,
   listLearningRecords,
+  getLearningRecord,
+  updateLearningRecord,
   getConversation,
   clearAllData,
   askQuestion,
   uploadDocument,
   getDocumentFileUrl,
+  getApiBaseUrl,
 } from './client'
 
 describe('api/client', () => {
@@ -82,6 +95,41 @@ describe('api/client', () => {
     })
   })
 
+  it('getKnowledgeBase 请求单体端点', async () => {
+    await getKnowledgeBase(3)
+    expect(mockApi.get).toHaveBeenCalledWith('/api/kbs/3')
+  })
+
+  it('updateKnowledgeBase 以 PATCH 提交部分更新', async () => {
+    await updateKnowledgeBase(3, { name: '新名称' })
+    expect(mockApi.patch).toHaveBeenCalledWith('/api/kbs/3', { name: '新名称' })
+  })
+
+  it('deleteKnowledgeBase 发出 DELETE', async () => {
+    await deleteKnowledgeBase(3)
+    expect(mockApi.delete).toHaveBeenCalledWith('/api/kbs/3')
+  })
+
+  it('rebuildKnowledgeBaseIndex 提交重建索引', async () => {
+    await rebuildKnowledgeBaseIndex(3)
+    expect(mockApi.post).toHaveBeenCalledWith('/api/kbs/3/rebuild-index')
+  })
+
+  it('listDocumentSections 透传分页参数', async () => {
+    await listDocumentSections(7, { limit: 20 })
+    expect(mockApi.get).toHaveBeenCalledWith('/api/documents/7/sections', { params: { limit: 20 } })
+  })
+
+  it('getLearningRecord 请求单体端点', async () => {
+    await getLearningRecord(11)
+    expect(mockApi.get).toHaveBeenCalledWith('/api/learning-records/11')
+  })
+
+  it('updateLearningRecord 以 PATCH 提交（标记已复习走 metadata）', async () => {
+    await updateLearningRecord(11, { metadata: { reviewed: true } })
+    expect(mockApi.patch).toHaveBeenCalledWith('/api/learning-records/11', { metadata: { reviewed: true } })
+  })
+
   it('clearAllData 必须携带 confirmation=DELETE（二次确认契约）', async () => {
     await clearAllData()
     expect(mockApi.delete).toHaveBeenCalledWith('/api/admin/data', {
@@ -108,6 +156,24 @@ describe('api/client', () => {
   })
 
   it('getDocumentFileUrl 拼出可下载原始文件地址', () => {
-    expect(getDocumentFileUrl(7)).toBe('http://127.0.0.1:8000/api/documents/7/file')
+    expect(getDocumentFileUrl(7)).toBe('/api/documents/7/file')
+  })
+
+  it('未设置 VITE_API_BASE 时默认同源空 baseURL（交给 vite proxy 或后端静态托管）', async () => {
+    vi.resetModules()
+    vi.stubEnv('VITE_API_BASE', '')
+    const mod = await import('./client')
+    expect(mod.getApiBaseUrl()).toBe('')
+    expect(mod.getDocumentFileUrl(7)).toBe('/api/documents/7/file')
+    vi.unstubAllEnvs()
+  })
+
+  it('设置 VITE_API_BASE 时覆盖为直连后端地址', async () => {
+    vi.resetModules()
+    vi.stubEnv('VITE_API_BASE', 'http://10.0.0.8:9000')
+    const mod = await import('./client')
+    expect(mod.getApiBaseUrl()).toBe('http://10.0.0.8:9000')
+    expect(mod.getDocumentFileUrl(7)).toBe('http://10.0.0.8:9000/api/documents/7/file')
+    vi.unstubAllEnvs()
   })
 })

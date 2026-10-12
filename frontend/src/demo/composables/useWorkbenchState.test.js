@@ -25,7 +25,7 @@ describe('useWorkbenchState', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     listKnowledgeBases.mockResolvedValue({
-      data: [{ id: 1, name: '大数据原理', category: '课程' }],
+      data: [{ id: 1, name: '产品手册', category: '' }],
     })
     getSystemSettings.mockResolvedValue({
       data: { privacy_mode: 'hybrid', top_k: 5, glass_variant: 'balanced' },
@@ -34,7 +34,7 @@ describe('useWorkbenchState', () => {
     listDocuments.mockResolvedValue({ data: [] })
   })
 
-  it('loadApplication 填充课程、设置与 Provider 状态并选中第一门课程', async () => {
+  it('loadApplication 填充知识库、设置与 Provider 状态并选中第一个知识库', async () => {
     const state = useWorkbenchState()
     await state.loadApplication()
     expect(state.knowledgeBases.value).toHaveLength(1)
