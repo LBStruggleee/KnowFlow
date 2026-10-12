@@ -1,5 +1,5 @@
 import { createApp } from 'vue'
-import { ElDropdown, ElIcon, ElMessage, ElMessageBox, ElSlider } from 'element-plus'
+import { ElDropdown, ElIcon, ElSlider } from 'element-plus'
 import 'element-plus/es/components/dropdown/style/css'
 import 'element-plus/es/components/icon/style/css'
 import 'element-plus/es/components/message/style/css'

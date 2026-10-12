@@ -11,8 +11,8 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
           cache: pip
@@ -25,10 +25,20 @@ jobs:
         run: ruff format --check backend
       - name: Run static analysis
         run: ruff check backend
-      - name: Run backend tests
+      - name: Run type check
+        working-directory: backend
+        run: mypy
+      - name: Run backend tests with coverage
         env:
           PYTHONPATH: backend
-        run: pytest backend/tests -q
+        run: pytest backend/tests -q --cov=app --cov-report=term-missing --cov-report=xml
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backend-coverage
+          path: coverage.xml
+          if-no-files-found: warn
       - name: Audit backend dependencies
         run: pip-audit -r backend/requirements.txt --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
 
@@ -38,14 +48,16 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci
+      - name: Run frontend lint
+        run: npm run lint
       - name: Run frontend tests
         run: npm test
       - name: Build frontend

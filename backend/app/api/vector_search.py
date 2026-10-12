@@ -8,7 +8,11 @@ fuses ranked results with RRF. The route path is kept for compatibility.
 
 from app.core.database import get_db
 from app.core.db_utils import get_knowledge_base_or_404
-from app.schemas.vector_search import VectorSearchRequest, VectorSearchResponse
+from app.schemas.vector_search import (
+    VectorSearchRequest,
+    VectorSearchResponse,
+    VectorSearchResult,
+)
 from app.services.hybrid_search import search_hybrid
 from app.services.settings_service import typed_settings
 from fastapi import APIRouter, Depends
@@ -31,6 +35,9 @@ def search_knowledge_base(
         kb_id=kb_id,
         query=payload.query,
         top_k=payload.top_k,
-        channels=str(config["retrieval_channels"]),
+        channels=config["retrieval_channels"],
     )
-    return VectorSearchResponse(query=payload.query, results=hybrid.hits)
+    return VectorSearchResponse(
+        query=payload.query,
+        results=[VectorSearchResult(**hit) for hit in hybrid.hits],
+    )

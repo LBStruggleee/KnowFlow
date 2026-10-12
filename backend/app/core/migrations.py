@@ -44,7 +44,7 @@ def _migrate_backfill_search_text(engine: Engine) -> None:
 # Ordered, idempotent steps. The order mirrors the historical startup
 # sequence: columns must exist before the FTS index is built over them, and
 # the FTS UPDATE trigger keeps the index in sync while the backfill commits.
-MIGRATIONS: list[tuple[int, str, Callable[[Engine], None]]] = [
+MIGRATIONS: list[tuple[int, str, Callable[[Engine], object]]] = [
     (1, "ensure_chunk_columns", ensure_chunk_columns),
     (2, "ensure_lexical_index", ensure_lexical_index),
     (3, "backfill_search_text", _migrate_backfill_search_text),

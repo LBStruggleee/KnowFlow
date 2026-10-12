@@ -12,3 +12,11 @@ addopts = "-q"
 
 [tool.coverage.run]
 source = ["app"]
+
+[tool.mypy]
+python_version = "3.13"
+explicit_package_bases = true
+mypy_path = "."
+ignore_missing_imports = true
+check_untyped_defs = true
+files = ["app"]

@@ -48,4 +48,4 @@ settings = Settings()
 
 def is_api_key_configured(value: str | None) -> bool:
     """Treat empty strings and placeholder keys as unconfigured."""
-    return bool(value) and "your_dashscope_api_key" not in value
+    return bool(value) and "your_dashscope_api_key" not in (value or "")

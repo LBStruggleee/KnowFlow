@@ -35,7 +35,6 @@ import {
   askQuestion,
   uploadDocument,
   getDocumentFileUrl,
-  getApiBaseUrl,
 } from './client'
 
 describe('api/client', () => {

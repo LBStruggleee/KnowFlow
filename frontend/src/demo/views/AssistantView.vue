@@ -213,25 +213,49 @@ watch(
           <h1>{{ course.name }}</h1>
           <p>基于 {{ documentCount }} 份资料回答，关键结论将标注原文引用。</p>
         </div>
-        <button class="new-chat-button glass-control" type="button" @click="newChat">
+        <button
+          class="new-chat-button glass-control"
+          type="button"
+          @click="newChat"
+        >
           <el-icon><EditPen /></el-icon><span>新对话</span>
         </button>
       </header>
 
-      <div class="mode-strip" role="tablist" aria-label="学习任务类型">
-        <button v-for="mode in TASK_MODES" :key="mode.id" type="button" :class="{ active: activeMode === mode.id }" @click="activeMode = mode.id">
+      <div
+        class="mode-strip"
+        role="tablist"
+        aria-label="学习任务类型"
+      >
+        <button
+          v-for="mode in TASK_MODES"
+          :key="mode.id"
+          type="button"
+          :class="{ active: activeMode === mode.id }"
+          @click="activeMode = mode.id"
+        >
           {{ mode.label }}
         </button>
       </div>
 
-      <div ref="conversationScroll" class="conversation-scroll">
-        <div v-if="!messages.length" class="assistant-empty">
+      <div
+        ref="conversationScroll"
+        class="conversation-scroll"
+      >
+        <div
+          v-if="!messages.length"
+          class="assistant-empty"
+        >
           <span class="assistant-mark"><el-icon><MagicStick /></el-icon></span>
           <strong>从知识库资料开始提问</strong>
           <p>输入一个问题，或选择上方任务模式生成总结、对比和练习。</p>
         </div>
 
-        <article v-for="message in messages" :key="message.id" :class="['message', message.role === 'user' ? 'user-message' : 'assistant-message', { 'message-error': message.error }]">
+        <article
+          v-for="message in messages"
+          :key="message.id"
+          :class="['message', message.role === 'user' ? 'user-message' : 'assistant-message', { 'message-error': message.error }]"
+        >
           <template v-if="message.role === 'user'">
             <span class="message-author">你</span><p>{{ message.content }}</p>
           </template>
@@ -240,66 +264,173 @@ watch(
               <span class="assistant-mark"><el-icon><MagicStick /></el-icon></span>
               <span><strong>KnowFlow</strong><em>{{ assistantMeta(message) }}</em></span>
             </header>
-            <div class="answer-content markdown-answer" v-html="renderMarkdown(message.content)"></div>
-            <footer v-if="!message.error && message === lastAssistantMessage" class="answer-actions">
-              <span v-if="message.usageText" class="usage-note">{{ message.usageText }}</span>
-              <button type="button" @click="saveLearningRecord('note')"><el-icon><Notebook /></el-icon>存为笔记</button>
-              <button type="button" @click="saveLearningRecord('exercise')"><el-icon><Tickets /></el-icon>保存练习</button>
-              <button type="button" @click="sourcePanelOpen = true"><el-icon><Document /></el-icon>查看检索依据</button>
+            <div
+              class="answer-content markdown-answer"
+              v-html="renderMarkdown(message.content)"
+            />
+            <footer
+              v-if="!message.error && message === lastAssistantMessage"
+              class="answer-actions"
+            >
+              <span
+                v-if="message.usageText"
+                class="usage-note"
+              >{{ message.usageText }}</span>
+              <button
+                type="button"
+                @click="saveLearningRecord('note')"
+              >
+                <el-icon><Notebook /></el-icon>存为笔记
+              </button>
+              <button
+                type="button"
+                @click="saveLearningRecord('exercise')"
+              >
+                <el-icon><Tickets /></el-icon>保存练习
+              </button>
+              <button
+                type="button"
+                @click="sourcePanelOpen = true"
+              >
+                <el-icon><Document /></el-icon>查看检索依据
+              </button>
             </footer>
           </template>
         </article>
 
-        <article v-if="sending" class="message assistant-message answer-loading" aria-live="polite">
-          <header class="assistant-author"><span class="assistant-mark"><el-icon><MagicStick /></el-icon></span><span><strong>KnowFlow</strong><em>正在检索知识库资料</em></span></header>
-          <span></span><span></span><span></span>
+        <article
+          v-if="sending"
+          class="message assistant-message answer-loading"
+          aria-live="polite"
+        >
+          <header class="assistant-author">
+            <span class="assistant-mark"><el-icon><MagicStick /></el-icon></span><span><strong>KnowFlow</strong><em>正在检索知识库资料</em></span>
+          </header>
+          <span /><span /><span />
         </article>
       </div>
 
       <section class="composer glass-surface">
-        <textarea v-model="question" rows="2" :placeholder="composerPlaceholder" :disabled="sending" @keydown.ctrl.enter.prevent="submitQuestion"></textarea>
+        <textarea
+          v-model="question"
+          rows="2"
+          :placeholder="composerPlaceholder"
+          :disabled="sending"
+          @keydown.ctrl.enter.prevent="submitQuestion"
+        />
         <div class="composer-footer">
-          <div class="composer-context"><button type="button" @click="emit('open-knowledge')"><el-icon><Collection /></el-icon>全部资料</button><span>{{ sources.length || '暂无' }} 个命中片段</span></div>
-          <button class="send-button" type="button" :disabled="!question.trim() || sending" aria-label="发送问题" @click="submitQuestion"><el-icon><ArrowUp /></el-icon></button>
+          <div class="composer-context">
+            <button
+              type="button"
+              @click="emit('open-knowledge')"
+            >
+              <el-icon><Collection /></el-icon>全部资料
+            </button><span>{{ sources.length || '暂无' }} 个命中片段</span>
+          </div>
+          <button
+            class="send-button"
+            type="button"
+            :disabled="!question.trim() || sending"
+            aria-label="发送问题"
+            @click="submitQuestion"
+          >
+            <el-icon><ArrowUp /></el-icon>
+          </button>
         </div>
       </section>
 
       <div class="suggestion-row">
         <span>继续探索</span>
-        <button type="button" @click="question = '请根据知识库中的资料，总结核心要点与关键结论。'">总结知识库要点</button>
-        <button type="button" @click="prepareExercise">生成 3 道练习题</button>
+        <button
+          type="button"
+          @click="question = '请根据知识库中的资料，总结核心要点与关键结论。'"
+        >
+          总结知识库要点
+        </button>
+        <button
+          type="button"
+          @click="prepareExercise"
+        >
+          生成 3 道练习题
+        </button>
       </div>
     </section>
 
-    <aside :class="['evidence-panel', 'glass-surface', evidencePanelState.stateClass]" :aria-label="evidencePanelState.toggleLabel">
-      <header v-if="sourcePanelOpen" class="evidence-header">
+    <aside
+      :class="['evidence-panel', 'glass-surface', evidencePanelState.stateClass]"
+      :aria-label="evidencePanelState.toggleLabel"
+    >
+      <header
+        v-if="sourcePanelOpen"
+        class="evidence-header"
+      >
         <div><span class="eyebrow">Evidence</span><h2>回答依据</h2></div>
-        <button class="icon-button glass-control" type="button" :aria-label="evidencePanelState.toggleLabel" :title="evidencePanelState.toggleLabel" :aria-expanded="sourcePanelOpen" @click="sourcePanelOpen = false"><el-icon><Fold /></el-icon></button>
+        <button
+          class="icon-button glass-control"
+          type="button"
+          :aria-label="evidencePanelState.toggleLabel"
+          :title="evidencePanelState.toggleLabel"
+          :aria-expanded="sourcePanelOpen"
+          @click="sourcePanelOpen = false"
+        >
+          <el-icon><Fold /></el-icon>
+        </button>
       </header>
 
       <template v-if="sourcePanelOpen">
         <div class="evidence-summary">
-          <span><i class="status-dot"></i>{{ sources.length ? '依据可查' : '等待提问' }}</span>
+          <span><i class="status-dot" />{{ sources.length ? '依据可查' : '等待提问' }}</span>
           <strong>{{ sources.length }} 个来源</strong>
           <em>最高匹配 {{ bestScore }}</em><em v-if="channelLabel">{{ channelLabel }}</em>
         </div>
-        <div v-if="sources.length" class="source-list">
-          <button v-for="(source, index) in sources" :key="source.chunk_id" type="button" :class="['source-item', { active: selectedSourceId === source.chunk_id }]" @click="selectedSourceId = source.chunk_id">
+        <div
+          v-if="sources.length"
+          class="source-list"
+        >
+          <button
+            v-for="(source, index) in sources"
+            :key="source.chunk_id"
+            type="button"
+            :class="['source-item', { active: selectedSourceId === source.chunk_id }]"
+            @click="selectedSourceId = source.chunk_id"
+          >
             <span class="source-index">{{ index + 1 }}</span>
             <span class="source-copy"><strong>{{ source.document_title || source.file_name || '知识库资料' }}</strong><em>{{ formatSourceSubtitle(source) }}</em></span>
             <span class="source-score">{{ Math.round(source.score * 100) }}%</span>
             <p>{{ source.content }}</p>
           </button>
         </div>
-        <div v-else class="inline-empty compact-empty"><el-icon><Files /></el-icon><strong>暂无回答依据</strong><span>发送问题后，这里会展示真实命中片段。</span></div>
-        <button class="open-source-button glass-control" type="button" :disabled="!selectedSourceId" @click="openSelectedSource"><el-icon><Document /></el-icon><span>打开原始资料</span></button>
+        <div
+          v-else
+          class="inline-empty compact-empty"
+        >
+          <el-icon><Files /></el-icon><strong>暂无回答依据</strong><span>发送问题后，这里会展示真实命中片段。</span>
+        </div>
+        <button
+          class="open-source-button glass-control"
+          type="button"
+          :disabled="!selectedSourceId"
+          @click="openSelectedSource"
+        >
+          <el-icon><Document /></el-icon><span>打开原始资料</span>
+        </button>
       </template>
 
-      <button v-else class="evidence-capsule-trigger" type="button" :aria-label="evidencePanelState.toggleLabel" :title="evidencePanelState.toggleLabel" :aria-expanded="sourcePanelOpen" @click="sourcePanelOpen = true">
+      <button
+        v-else
+        class="evidence-capsule-trigger"
+        type="button"
+        :aria-label="evidencePanelState.toggleLabel"
+        :title="evidencePanelState.toggleLabel"
+        :aria-expanded="sourcePanelOpen"
+        @click="sourcePanelOpen = true"
+      >
         <span class="evidence-capsule-icon"><el-icon><Files /></el-icon></span>
         <span class="evidence-capsule-desktop"><strong>依据</strong><em>{{ sources.length }}</em></span>
         <span class="evidence-capsule-mobile"><strong>回答依据</strong><em>{{ evidencePanelState.sourceSummary }}</em></span>
-        <el-icon class="evidence-capsule-arrow"><Expand /></el-icon>
+        <el-icon class="evidence-capsule-arrow">
+          <Expand />
+        </el-icon>
       </button>
     </aside>
   </div>

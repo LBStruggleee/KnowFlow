@@ -4,6 +4,10 @@ from typing import Any
 from app.core.config import is_api_key_configured, settings
 from fastapi import HTTPException, status
 from openai import APIConnectionError, APIStatusError, OpenAI
+from openai.types.chat import (
+    ChatCompletionAssistantMessageParam,
+    ChatCompletionUserMessageParam,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +43,16 @@ class QwenLLMService:
                 detail="DASHSCOPE_API_KEY is not configured. Please set it in backend/.env.",
             )
 
+        # available() above guarantees a configured client; the assert narrows
+        # the Optional for the type checker without a runtime branch.
+        assert self.client is not None
         try:
             safe_history = [
-                message
+                ChatCompletionUserMessageParam(role="user", content=message["content"])
+                if message["role"] == "user"
+                else ChatCompletionAssistantMessageParam(
+                    role="assistant", content=message["content"]
+                )
                 for message in (history or [])
                 if message.get("role") in {"user", "assistant"} and message.get("content")
             ]

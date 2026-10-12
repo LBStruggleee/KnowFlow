@@ -6,6 +6,7 @@ from typing import Any
 
 from app.models.knowledge_base import KnowledgeBase
 from fastapi import HTTPException, status
+from sqlalchemy import Select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -73,3 +74,12 @@ def get_knowledge_base_or_404(db: Session, kb_id: int) -> KnowledgeBase:
             detail="Knowledge base not found.",
         )
     return knowledge_base
+
+
+def id_to_text_map(db: Session, statement: Select[tuple[int, str]]) -> dict[int, str]:
+    """Run a two-column ``(id, text)`` select and build an id-to-text dict.
+
+    The query must return at most one text row per id; duplicates keep the
+    last row, mirroring the ``dict(...)`` idiom this replaces.
+    """
+    return {int(row[0]): str(row[1]) for row in db.execute(statement)}

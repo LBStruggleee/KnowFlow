@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 
 from docx import Document
+from docx.document import Document as DocxDocument
 from docx.oxml.ns import qn
 from docx.table import Table
 from docx.text.paragraph import Paragraph
@@ -64,7 +65,7 @@ def _table_row_texts(table: Table) -> list[str]:
     return rows
 
 
-def _iter_docx_body_items(document: Document):
+def _iter_docx_body_items(document: DocxDocument):
     """Yield top-level paragraphs and tables in true document order.
 
     ``document.paragraphs`` and ``document.tables`` are separate lists that

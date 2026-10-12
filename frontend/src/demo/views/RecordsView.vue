@@ -120,33 +120,122 @@ watch(filteredRecords, (matches) => {
   <section class="product-view records-view">
     <header class="view-header">
       <div><span class="eyebrow">Learning Memory</span><h1>学习记录</h1><p>把 {{ course.name }} 的对话、笔记、练习和错题留在同一条知识脉络中。</p></div>
-      <button class="primary-action glass-control" type="button" @click="emit('open-assistant')"><el-icon><EditPen /></el-icon><span>开始新学习</span></button>
+      <button
+        class="primary-action glass-control"
+        type="button"
+        @click="emit('open-assistant')"
+      >
+        <el-icon><EditPen /></el-icon><span>开始新学习</span>
+      </button>
     </header>
 
     <div class="record-overview glass-surface">
-      <div class="review-ring"><strong>{{ records.length }}</strong><span>学习产物</span></div>
-      <div class="review-copy"><span class="eyebrow">本地学习记忆</span><strong>{{ records.length ? '学习上下文已持续积累' : '从一次知识库问答开始' }}</strong><p>{{ records.length ? '对话与主动保存的产物均可回到原学习上下文。' : '回答后可保存为笔记、练习或错题，并标记复习进度。' }}</p></div>
-      <div class="review-stats"><span><strong>{{ counts.conversation }}</strong><em>次对话</em></span><span><strong>{{ counts.note }}</strong><em>篇笔记</em></span><span><strong>{{ counts.exercise + counts.mistake }}</strong><em>项练习</em></span></div>
-      <button class="secondary-action glass-control" type="button" :disabled="!counts.mistake" @click="activeType = 'mistake'">查看待复习</button>
+      <div class="review-ring">
+        <strong>{{ records.length }}</strong><span>学习产物</span>
+      </div>
+      <div class="review-copy">
+        <span class="eyebrow">本地学习记忆</span><strong>{{ records.length ? '学习上下文已持续积累' : '从一次知识库问答开始' }}</strong><p>{{ records.length ? '对话与主动保存的产物均可回到原学习上下文。' : '回答后可保存为笔记、练习或错题，并标记复习进度。' }}</p>
+      </div>
+      <div class="review-stats">
+        <span><strong>{{ counts.conversation }}</strong><em>次对话</em></span><span><strong>{{ counts.note }}</strong><em>篇笔记</em></span><span><strong>{{ counts.exercise + counts.mistake }}</strong><em>项练习</em></span>
+      </div>
+      <button
+        class="secondary-action glass-control"
+        type="button"
+        :disabled="!counts.mistake"
+        @click="activeType = 'mistake'"
+      >
+        查看待复习
+      </button>
     </div>
 
     <div class="records-layout">
       <section class="content-panel records-panel">
-        <header class="panel-toolbar"><div class="segmented-control records-tabs"><button v-for="tab in [{ id: 'all', label: '全部' }, { id: 'conversation', label: '对话' }, { id: 'note', label: '笔记' }, { id: 'exercise', label: '练习' }, { id: 'mistake', label: '错题' }]" :key="tab.id" type="button" :class="{ active: activeType === tab.id }" @click="activeType = tab.id">{{ tab.label }}</button></div><label class="compact-search"><el-icon><Search /></el-icon><input v-model="query" type="search" placeholder="搜索学习记录" /></label></header>
+        <header class="panel-toolbar">
+          <div class="segmented-control records-tabs">
+            <button
+              v-for="tab in [{ id: 'all', label: '全部' }, { id: 'conversation', label: '对话' }, { id: 'note', label: '笔记' }, { id: 'exercise', label: '练习' }, { id: 'mistake', label: '错题' }]"
+              :key="tab.id"
+              type="button"
+              :class="{ active: activeType === tab.id }"
+              @click="activeType = tab.id"
+            >
+              {{ tab.label }}
+            </button>
+          </div><label class="compact-search"><el-icon><Search /></el-icon><input
+            v-model="query"
+            type="search"
+            placeholder="搜索学习记录"
+          ></label>
+        </header>
         <div class="record-list">
-          <button v-for="record in filteredRecords" :key="record.key" type="button" :class="['record-row', { active: selectedRecordKey === record.key }]" @click="selectedRecordKey = record.key"><span :class="['record-icon', `record-${record.type}`]"><el-icon><component :is="typeMeta[record.type].icon" /></el-icon></span><span class="record-main"><strong>{{ record.title }}</strong><p>{{ record.summary }}</p><em>{{ record.course }} · {{ record.meta }}</em></span><span class="record-time">{{ record.time }}</span></button>
-          <div v-if="loading" class="inline-empty"><el-icon><RefreshRight /></el-icon><strong>正在读取学习记录</strong></div>
-          <div v-else-if="!filteredRecords.length" class="inline-empty"><el-icon><Search /></el-icon><strong>{{ records.length ? '没有匹配的学习记录' : '还没有学习记录' }}</strong><span>{{ records.length ? '修改分类或搜索关键词后再试。' : '开始知识库问答，并把有价值的回答保存下来。' }}</span></div>
+          <button
+            v-for="record in filteredRecords"
+            :key="record.key"
+            type="button"
+            :class="['record-row', { active: selectedRecordKey === record.key }]"
+            @click="selectedRecordKey = record.key"
+          >
+            <span :class="['record-icon', `record-${record.type}`]"><el-icon><component :is="typeMeta[record.type].icon" /></el-icon></span><span class="record-main"><strong>{{ record.title }}</strong><p>{{ record.summary }}</p><em>{{ record.course }} · {{ record.meta }}</em></span><span class="record-time">{{ record.time }}</span>
+          </button>
+          <div
+            v-if="loading"
+            class="inline-empty"
+          >
+            <el-icon><RefreshRight /></el-icon><strong>正在读取学习记录</strong>
+          </div>
+          <div
+            v-else-if="!filteredRecords.length"
+            class="inline-empty"
+          >
+            <el-icon><Search /></el-icon><strong>{{ records.length ? '没有匹配的学习记录' : '还没有学习记录' }}</strong><span>{{ records.length ? '修改分类或搜索关键词后再试。' : '开始知识库问答，并把有价值的回答保存下来。' }}</span>
+          </div>
         </div>
       </section>
 
-      <aside v-if="selectedRecord" class="record-preview glass-surface">
+      <aside
+        v-if="selectedRecord"
+        class="record-preview glass-surface"
+      >
         <header><span :class="['record-icon', `record-${selectedRecord.type}`]"><el-icon><component :is="typeMeta[selectedRecord.type].icon" /></el-icon></span><div><span class="eyebrow">{{ typeMeta[selectedRecord.type].label }}</span><em>{{ selectedRecord.time }}</em></div></header>
         <h2>{{ selectedRecord.title }}</h2><p>{{ selectedRecord.summary }}</p>
-        <div class="preview-tags"><span v-for="tag in selectedRecord.tags" :key="tag">{{ tag }}</span></div>
-        <div class="preview-evidence"><span class="section-label">关联内容</span><div><el-icon><CollectionTag /></el-icon><span><strong>{{ selectedRecord.course }}</strong><em>知识库</em></span></div><div><el-icon><Check /></el-icon><span><strong>保存在本地</strong><em>{{ selectedRecord.meta }}</em></span></div></div>
-        <blockquote v-if="selectedRecord.content">{{ selectedRecord.content }}</blockquote>
-        <div class="preview-actions"><button v-if="selectedRecord.type !== 'conversation'" class="secondary-action glass-control" type="button" :disabled="Boolean(selectedRecord.metadata?.reviewed)" @click="markReviewed(selectedRecord)"><el-icon><Check /></el-icon>{{ selectedRecord.metadata?.reviewed ? '已复习' : '标记已复习' }}</button><button class="primary-action glass-control" type="button" @click="continueRecord()"><el-icon><RefreshRight /></el-icon>继续学习</button><button class="danger-icon-button" type="button" aria-label="删除记录" title="删除记录" @click="removeRecord(selectedRecord)"><el-icon><Delete /></el-icon></button></div>
+        <div class="preview-tags">
+          <span
+            v-for="tag in selectedRecord.tags"
+            :key="tag"
+          >{{ tag }}</span>
+        </div>
+        <div class="preview-evidence">
+          <span class="section-label">关联内容</span><div><el-icon><CollectionTag /></el-icon><span><strong>{{ selectedRecord.course }}</strong><em>知识库</em></span></div><div><el-icon><Check /></el-icon><span><strong>保存在本地</strong><em>{{ selectedRecord.meta }}</em></span></div>
+        </div>
+        <blockquote v-if="selectedRecord.content">
+          {{ selectedRecord.content }}
+        </blockquote>
+        <div class="preview-actions">
+          <button
+            v-if="selectedRecord.type !== 'conversation'"
+            class="secondary-action glass-control"
+            type="button"
+            :disabled="Boolean(selectedRecord.metadata?.reviewed)"
+            @click="markReviewed(selectedRecord)"
+          >
+            <el-icon><Check /></el-icon>{{ selectedRecord.metadata?.reviewed ? '已复习' : '标记已复习' }}
+          </button><button
+            class="primary-action glass-control"
+            type="button"
+            @click="continueRecord()"
+          >
+            <el-icon><RefreshRight /></el-icon>继续学习
+          </button><button
+            class="danger-icon-button"
+            type="button"
+            aria-label="删除记录"
+            title="删除记录"
+            @click="removeRecord(selectedRecord)"
+          >
+            <el-icon><Delete /></el-icon>
+          </button>
+        </div>
       </aside>
     </div>
   </section>

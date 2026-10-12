@@ -2,7 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Bell,
   FolderOpened,
   Lock,
   Menu,
@@ -115,66 +114,195 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncViewFromHash)
 
 <template>
   <main :class="['demo-canvas', `glass-${glassVariant}`]">
-    <div class="ambient-grid" aria-hidden="true">
-      <span class="ambient-block block-green"></span>
-      <span class="ambient-block block-blue"></span>
-      <span class="ambient-block block-amber"></span>
+    <div
+      class="ambient-grid"
+      aria-hidden="true"
+    >
+      <span class="ambient-block block-green" />
+      <span class="ambient-block block-blue" />
+      <span class="ambient-block block-amber" />
     </div>
 
     <header class="mobile-header glass-surface">
-      <button class="icon-button glass-control" type="button" aria-label="打开导航" @click="mobileNavOpen = !mobileNavOpen">
+      <button
+        class="icon-button glass-control"
+        type="button"
+        aria-label="打开导航"
+        @click="mobileNavOpen = !mobileNavOpen"
+      >
         <el-icon><Menu /></el-icon>
       </button>
-      <div class="mobile-brand"><span>K</span><strong>KnowFlow</strong></div>
-      <button class="icon-button glass-control" type="button" aria-label="新建知识库" @click="createCourse"><el-icon><Plus /></el-icon></button>
+      <div class="mobile-brand">
+        <span>K</span><strong>KnowFlow</strong>
+      </div>
+      <button
+        class="icon-button glass-control"
+        type="button"
+        aria-label="新建知识库"
+        @click="createCourse"
+      >
+        <el-icon><Plus /></el-icon>
+      </button>
     </header>
 
-    <button v-if="mobileNavOpen" class="mobile-scrim" type="button" aria-label="关闭导航" @click="mobileNavOpen = false"></button>
+    <button
+      v-if="mobileNavOpen"
+      class="mobile-scrim"
+      type="button"
+      aria-label="关闭导航"
+      @click="mobileNavOpen = false"
+    />
 
     <aside :class="['sidebar', 'glass-surface', { 'is-open': mobileNavOpen }]">
-      <div class="brand-lockup"><div class="brand-symbol">K</div><div><strong>KnowFlow</strong><span>知识工作台</span></div></div>
+      <div class="brand-lockup">
+        <div class="brand-symbol">
+          K
+        </div><div><strong>KnowFlow</strong><span>知识工作台</span></div>
+      </div>
 
-      <nav class="primary-nav" aria-label="主导航">
-        <button v-for="item in navItems" :key="item.id" type="button" :class="['nav-item', { active: activeView === item.id }]" @click="selectView(item.id)">
+      <nav
+        class="primary-nav"
+        aria-label="主导航"
+      >
+        <button
+          v-for="item in navItems"
+          :key="item.id"
+          type="button"
+          :class="['nav-item', { active: activeView === item.id }]"
+          @click="selectView(item.id)"
+        >
           <el-icon><component :is="item.icon" /></el-icon><span>{{ item.label }}</span>
         </button>
       </nav>
 
       <section class="course-switcher">
-        <div class="section-label-row"><span class="section-label">我的知识库</span><button class="tiny-action" type="button" aria-label="新建知识库" title="新建知识库" @click="createCourse"><el-icon><Plus /></el-icon></button></div>
-        <button v-for="course in knowledgeBases" :key="course.id" type="button" :class="['course-item', { active: selectedKbId === course.id }]" @click="selectCourseAndCloseNav(course.id)">
-          <span :class="['course-mark', `tone-${['green', 'blue', 'amber'][course.id % 3]}`]"></span>
+        <div class="section-label-row">
+          <span class="section-label">我的知识库</span><button
+            class="tiny-action"
+            type="button"
+            aria-label="新建知识库"
+            title="新建知识库"
+            @click="createCourse"
+          >
+            <el-icon><Plus /></el-icon>
+          </button>
+        </div>
+        <button
+          v-for="course in knowledgeBases"
+          :key="course.id"
+          type="button"
+          :class="['course-item', { active: selectedKbId === course.id }]"
+          @click="selectCourseAndCloseNav(course.id)"
+        >
+          <span :class="['course-mark', `tone-${['green', 'blue', 'amber'][course.id % 3]}`]" />
           <span><strong>{{ course.name }}</strong><em>{{ selectedKbId === course.id ? getCourseMeta(documents) : course.category || '知识库' }}</em></span>
         </button>
-        <button v-if="!knowledgeBases.length && !loading" class="empty-course-action" type="button" @click="createCourse"><el-icon><Plus /></el-icon><span>创建第一个知识库</span></button>
+        <button
+          v-if="!knowledgeBases.length && !loading"
+          class="empty-course-action"
+          type="button"
+          @click="createCourse"
+        >
+          <el-icon><Plus /></el-icon><span>创建第一个知识库</span>
+        </button>
       </section>
 
       <footer class="sidebar-footer">
-        <div class="privacy-status"><span class="privacy-icon"><el-icon><Lock /></el-icon></span><span><strong>{{ privacyLabel }}</strong><em>{{ providerStatus?.llm_available ? '回答模型已就绪' : '当前使用本地提取式回答' }}</em></span></div>
-        <button class="avatar-button" type="button" aria-label="本地用户">BL</button>
+        <div class="privacy-status">
+          <span class="privacy-icon"><el-icon><Lock /></el-icon></span><span><strong>{{ privacyLabel }}</strong><em>{{ providerStatus?.llm_available ? '回答模型已就绪' : '当前使用本地提取式回答' }}</em></span>
+        </div>
+        <button
+          class="avatar-button"
+          type="button"
+          aria-label="本地用户"
+        >
+          BL
+        </button>
       </footer>
     </aside>
 
     <section class="workspace">
       <header class="workspace-toolbar glass-surface">
-        <div class="breadcrumb"><span>{{ selectedCourse?.name || 'KnowFlow' }}</span><span class="slash">/</span><strong>{{ activeNavItem?.label }}</strong></div>
+        <div class="breadcrumb">
+          <span>{{ selectedCourse?.name || 'KnowFlow' }}</span><span class="slash">/</span><strong>{{ activeNavItem?.label }}</strong>
+        </div>
         <div class="toolbar-actions">
-          <button class="search-trigger glass-control" type="button" @click="selectView('knowledge')"><el-icon><Search /></el-icon><span>搜索资料</span></button>
-          <button class="icon-button glass-control" type="button" aria-label="新建知识库" title="新建知识库" @click="createCourse"><el-icon><Plus /></el-icon></button>
-          <button class="icon-button glass-control" type="button" aria-label="设置" title="设置" @click="selectView('settings')"><el-icon><MoreFilled /></el-icon></button>
+          <button
+            class="search-trigger glass-control"
+            type="button"
+            @click="selectView('knowledge')"
+          >
+            <el-icon><Search /></el-icon><span>搜索资料</span>
+          </button>
+          <button
+            class="icon-button glass-control"
+            type="button"
+            aria-label="新建知识库"
+            title="新建知识库"
+            @click="createCourse"
+          >
+            <el-icon><Plus /></el-icon>
+          </button>
+          <button
+            class="icon-button glass-control"
+            type="button"
+            aria-label="设置"
+            title="设置"
+            @click="selectView('settings')"
+          >
+            <el-icon><MoreFilled /></el-icon>
+          </button>
         </div>
       </header>
 
-      <div v-if="loading" class="app-loading"><span></span><strong>正在载入本地学习空间</strong></div>
-      <section v-else-if="!selectedCourse" class="app-empty">
+      <div
+        v-if="loading"
+        class="app-loading"
+      >
+        <span /><strong>正在载入本地学习空间</strong>
+      </div>
+      <section
+        v-else-if="!selectedCourse"
+        class="app-empty"
+      >
         <span class="brand-symbol">K</span><h1>建立你的第一个知识库</h1><p>先创建知识库，再导入 PDF、PPTX、DOCX、Markdown 或文本资料。</p>
-        <button class="primary-action glass-control" type="button" @click="createCourse"><el-icon><Plus /></el-icon>新建知识库</button>
+        <button
+          class="primary-action glass-control"
+          type="button"
+          @click="createCourse"
+        >
+          <el-icon><Plus /></el-icon>新建知识库
+        </button>
       </section>
       <template v-else>
-        <AssistantView v-if="activeView === 'assistant'" :course="selectedCourse" :document-count="documents.length" :resume-conversation-id="resumeConversationId" @conversation-resumed="resumeConversationId = null" @open-knowledge="selectView('knowledge')" />
-        <KnowledgeView v-else-if="activeView === 'knowledge'" :course="selectedCourse" @documents-updated="handleDocumentsUpdated" @knowledge-base-changed="handleKnowledgeBaseChanged" />
-        <RecordsView v-else-if="activeView === 'records'" :course="selectedCourse" @open-assistant="openAssistant" />
-        <SettingsView v-else :initial-settings="settings" :provider-status="providerStatus" :glass-variant="glassVariant" @saved="handleSettingsSaved" @update:glass-variant="glassVariant = $event" @data-cleared="loadApplication" />
+        <AssistantView
+          v-if="activeView === 'assistant'"
+          :course="selectedCourse"
+          :document-count="documents.length"
+          :resume-conversation-id="resumeConversationId"
+          @conversation-resumed="resumeConversationId = null"
+          @open-knowledge="selectView('knowledge')"
+        />
+        <KnowledgeView
+          v-else-if="activeView === 'knowledge'"
+          :course="selectedCourse"
+          @documents-updated="handleDocumentsUpdated"
+          @knowledge-base-changed="handleKnowledgeBaseChanged"
+        />
+        <RecordsView
+          v-else-if="activeView === 'records'"
+          :course="selectedCourse"
+          @open-assistant="openAssistant"
+        />
+        <SettingsView
+          v-else
+          :initial-settings="settings"
+          :provider-status="providerStatus"
+          :glass-variant="glassVariant"
+          @saved="handleSettingsSaved"
+          @update:glass-variant="glassVariant = $event"
+          @data-cleared="loadApplication"
+        />
       </template>
     </section>
   </main>

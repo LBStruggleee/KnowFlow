@@ -1,4 +1,5 @@
 import json
+from typing import cast
 
 from app.core.database import get_db
 from app.core.db_utils import get_knowledge_base_or_404, load_json_column, safe_commit
@@ -8,6 +9,7 @@ from app.models.learning_record import LearningRecord
 from app.schemas.learning_record import (
     LearningRecordCreate,
     LearningRecordRead,
+    LearningRecordType,
     LearningRecordUpdate,
 )
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -124,7 +126,9 @@ def _record_read(record: LearningRecord) -> LearningRecordRead:
         kb_id=record.kb_id,
         conversation_id=record.conversation_id,
         source_message_id=record.source_message_id,
-        record_type=record.record_type,
+        # Writes go through the Literal-validated create/update payloads, so a
+        # stored record_type is always one of the allowed values.
+        record_type=cast(LearningRecordType, record.record_type),
         title=record.title,
         content=record.content,
         tags=load_json_column(record.tags_json, []),

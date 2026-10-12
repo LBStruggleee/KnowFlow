@@ -3,7 +3,7 @@ import logging
 import shutil
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from app.core.database import get_db
 from app.core.db_utils import load_json_column, safe_commit
@@ -23,7 +23,13 @@ from app.schemas.admin import (
     TokenUsageRead,
 )
 from app.services.llm_service import llm_service
-from app.services.settings_service import typed_settings, update_settings
+from app.services.settings_service import (
+    GlassVariant,
+    PrivacyMode,
+    RetrievalChannel,
+    typed_settings,
+    update_settings,
+)
 from app.services.vector_store_service import vector_store_service
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
@@ -50,14 +56,16 @@ def patch_system_settings(
     db: Session = Depends(get_db),
 ) -> SystemSettingsRead:
     values = update_settings(db, payload.model_dump(exclude_unset=True))
+    # update_settings seeds every key with a valid default and normalizes
+    # retrieval_channels, so the literal narrowing below cannot fail.
     return SystemSettingsRead(
         top_k=int(values["top_k"]),
         score_threshold=float(values["score_threshold"]),
         qwen_model=values["qwen_model"],
         temperature=float(values["temperature"]),
-        privacy_mode=values["privacy_mode"],
-        glass_variant=values["glass_variant"],
-        retrieval_channels=values["retrieval_channels"],
+        privacy_mode=cast(PrivacyMode, values["privacy_mode"]),
+        glass_variant=cast(GlassVariant, values["glass_variant"]),
+        retrieval_channels=cast(RetrievalChannel, values["retrieval_channels"]),
     )
 
 
@@ -69,7 +77,7 @@ def get_provider_status(db: Session = Depends(get_db)) -> ProviderStatusRead:
         llm_available=llm_service.available,
         embedding_provider=vector_store_service.embedding_provider,
         vector_collection=vector_store_service.collection_name,
-        privacy_mode=str(config["privacy_mode"]),
+        privacy_mode=config["privacy_mode"],
     )
 
 

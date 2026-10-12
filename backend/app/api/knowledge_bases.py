@@ -4,7 +4,12 @@ import threading
 from pathlib import Path
 
 from app.core.database import get_db
-from app.core.db_utils import commit_or_conflict, get_knowledge_base_or_404, safe_commit
+from app.core.db_utils import (
+    commit_or_conflict,
+    get_knowledge_base_or_404,
+    id_to_text_map,
+    safe_commit,
+)
 from app.core.files import UPLOAD_ROOT, safe_unlink
 from app.core.pagination import Page, page_params
 from app.models.conversation import ChatMessage, Conversation
@@ -254,12 +259,11 @@ def _chunk_section_paths(db: Session, chunks: list[DocumentChunk]) -> dict[int, 
     section_ids = {chunk.section_id for chunk in chunks if chunk.section_id is not None}
     if not section_ids:
         return {}
-    by_section = dict(
-        db.execute(
-            select(DocumentSection.id, DocumentSection.section_path).where(
-                DocumentSection.id.in_(section_ids)
-            )
-        ).all()
+    by_section = id_to_text_map(
+        db,
+        select(DocumentSection.id, DocumentSection.section_path).where(
+            DocumentSection.id.in_(section_ids)
+        ),
     )
     return {
         chunk.id: by_section.get(chunk.section_id, "")

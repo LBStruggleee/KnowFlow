@@ -1,4 +1,5 @@
 import os
+import sqlite3
 from collections.abc import Generator
 from pathlib import Path
 
@@ -19,11 +20,11 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 if DATABASE_URL.startswith("sqlite"):
 
     @event.listens_for(engine, "connect")
-    def _configure_sqlite_connection(dbapi_connection: object, _: object) -> None:
+    def _configure_sqlite_connection(dbapi_connection: sqlite3.Connection, _: object) -> None:
         configure_sqlite_connection(dbapi_connection)
 
 
-def configure_sqlite_connection(dbapi_connection: object) -> None:
+def configure_sqlite_connection(dbapi_connection: sqlite3.Connection) -> None:
     """Apply the SQLite settings every app connection needs.
 
     WAL lets concurrent readers work while a writer holds the database, and

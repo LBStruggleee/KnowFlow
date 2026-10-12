@@ -2,6 +2,7 @@ import logging
 import re
 from typing import Any
 
+from app.core.db_utils import id_to_text_map
 from app.models.document_chunk import DocumentChunk
 from app.models.document_section import DocumentSection
 from sqlalchemy import or_, select, text
@@ -131,12 +132,11 @@ def backfill_search_text(db: Session, batch_size: int = BACKFILL_BATCH_SIZE) -> 
         section_ids = {c.section_id for c in chunks if c.section_id is not None}
         paths: dict[int, str] = {}
         if section_ids:
-            paths = dict(
-                db.execute(
-                    select(DocumentSection.id, DocumentSection.section_path).where(
-                        DocumentSection.id.in_(section_ids)
-                    )
-                ).all()
+            paths = id_to_text_map(
+                db,
+                select(DocumentSection.id, DocumentSection.section_path).where(
+                    DocumentSection.id.in_(section_ids)
+                ),
             )
         for chunk in chunks:
             path = paths.get(chunk.section_id, "") if chunk.section_id else ""
@@ -188,12 +188,11 @@ def search_lexical(
     section_ids = {row["section_id"] for row in rows if row["section_id"] is not None}
     paths: dict[int, str] = {}
     if section_ids:
-        paths = dict(
-            db.execute(
-                select(DocumentSection.id, DocumentSection.section_path).where(
-                    DocumentSection.id.in_(section_ids)
-                )
-            ).all()
+        paths = id_to_text_map(
+            db,
+            select(DocumentSection.id, DocumentSection.section_path).where(
+                DocumentSection.id.in_(section_ids)
+            ),
         )
     hits = [
         {

@@ -1,10 +1,14 @@
 import logging
+from collections.abc import Callable
+from typing import Literal, TypedDict, TypeVar, cast
 
 from app.models.system_setting import SystemSetting
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 DEFAULT_SETTINGS: dict[str, tuple[str, str]] = {
     "top_k": ("5", "RAG 检索召回片段数"),
@@ -65,20 +69,43 @@ def update_settings(db: Session, payload: dict[str, object]) -> dict[str, str]:
     return get_settings(db)
 
 
-def typed_settings(db: Session) -> dict[str, object]:
+PrivacyMode = Literal["local", "hybrid", "cloud"]
+GlassVariant = Literal["clear", "balanced", "contrast"]
+RetrievalChannel = Literal["vector", "lexical", "hybrid"]
+
+
+class TypedSettings(TypedDict):
+    """Runtime-coerced settings, safe to pass straight into typed schemas."""
+
+    top_k: int
+    score_threshold: float
+    qwen_model: str
+    temperature: float
+    privacy_mode: PrivacyMode
+    glass_variant: GlassVariant
+    retrieval_channels: RetrievalChannel
+
+
+def typed_settings(db: Session) -> TypedSettings:
     values = get_settings(db)
+    # The stored values can drift from the allowed literals only through manual
+    # edits to the database; get_settings seeds every key with a valid default
+    # and update_settings validates on write, so a cast here documents the
+    # invariant instead of failing open.
     return {
         "top_k": _coerce_setting(values["top_k"], "top_k", int),
         "score_threshold": _coerce_setting(values["score_threshold"], "score_threshold", float),
         "qwen_model": values["qwen_model"],
         "temperature": _coerce_setting(values["temperature"], "temperature", float),
-        "privacy_mode": values["privacy_mode"],
-        "glass_variant": values["glass_variant"],
-        "retrieval_channels": normalize_retrieval_channels(values["retrieval_channels"]),
+        "privacy_mode": cast(PrivacyMode, values["privacy_mode"]),
+        "glass_variant": cast(GlassVariant, values["glass_variant"]),
+        "retrieval_channels": cast(
+            RetrievalChannel, normalize_retrieval_channels(values["retrieval_channels"])
+        ),
     }
 
 
-def _coerce_setting(raw: object, key: str, converter: type) -> object:
+def _coerce_setting[T](raw: str, key: str, converter: Callable[[str], T]) -> T:
     """Convert a stored setting, falling back to its default when corrupted."""
     default = DEFAULT_SETTINGS[key][0]
     try:

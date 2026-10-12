@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from app.core.config import settings
 from app.core.database import BASE_DIR, get_db
-from app.core.db_utils import get_knowledge_base_or_404, safe_commit
+from app.core.db_utils import get_knowledge_base_or_404, id_to_text_map, safe_commit
 from app.core.files import safe_unlink
 from app.core.pagination import Page, page_params
 from app.models.document import Document
@@ -239,12 +239,11 @@ def list_document_chunks(
     section_ids = {chunk.section_id for chunk in chunks if chunk.section_id is not None}
     paths: dict[int, str] = {}
     if section_ids:
-        paths = dict(
-            db.execute(
-                select(DocumentSection.id, DocumentSection.section_path).where(
-                    DocumentSection.id.in_(section_ids)
-                )
-            ).all()
+        paths = id_to_text_map(
+            db,
+            select(DocumentSection.id, DocumentSection.section_path).where(
+                DocumentSection.id.in_(section_ids)
+            ),
         )
     return [
         DocumentChunkRead(

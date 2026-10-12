@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Any
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -25,7 +26,7 @@ def chat(
     get_knowledge_base_or_404(db, payload.kb_id)
 
     config = typed_settings(db)
-    top_k = payload.top_k if payload.top_k is not None else int(config["top_k"])
+    top_k = payload.top_k if payload.top_k is not None else config["top_k"]
 
     conversation = _get_or_create_conversation(db, payload)
     history_messages = _load_history(db, conversation.id)
@@ -48,14 +49,14 @@ def chat(
             kb_id=payload.kb_id,
             question=payload.question,
             top_k=top_k,
-            score_threshold=float(config["score_threshold"]),
-            model=str(config["qwen_model"]),
-            temperature=float(config["temperature"]),
+            score_threshold=config["score_threshold"],
+            model=config["qwen_model"],
+            temperature=config["temperature"],
             history=history_messages,
             mode=payload.mode,
-            privacy_mode=str(config["privacy_mode"]),
+            privacy_mode=config["privacy_mode"],
             db=db,
-            channels=str(config["retrieval_channels"]),
+            channels=config["retrieval_channels"],
         )
     except HTTPException:
         raise
@@ -88,7 +89,7 @@ def chat(
     return ChatResponse(**result)
 
 
-def _enrich_sources(db: Session, sources: list[dict[str, object]]) -> list[dict[str, object]]:
+def _enrich_sources(db: Session, sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
     document_ids = {int(source["document_id"]) for source in sources}
     if not document_ids:
         return []
