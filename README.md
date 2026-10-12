@@ -6,16 +6,20 @@ KnowFlow 是一个本地单用户的智能知识库问答应用，覆盖文档�
 
 ## 当前状态
 
-当前版本 `0.3.0`，已完成一次全面代码审查和稳定性加固：
+当前版本 `0.3.0`，已完成一轮 61 项问题的专业评估与全面优化（4 个修复批次 + 独立复核，详见 [评估报告](docs/项目评估报告-2026-10-12.md) 与 [优化执行报告](docs/优化执行报告-2026-10-12.md)），并经 [优化后复评](docs/项目评估报告-优化后-2026-10-12.md) 逐条核实落地：
 
-- 三通道混合检索：SQLite FTS5 词面通道（中文双字分词 + LIKE 降级）与语义向量通道经 RRF（k=60）融合；检索通道（`vector`/`lexical`/`hybrid`）可在设置中切换，全过程有 trace。
-- 使用 DashScope `text-embedding-v3` 进行语义 embedding；没有有效 API Key 时保留 deterministic hashing fallback，方便离线开发和测试。
-- 文档解析输出层级化 Section 模型（`document_section` 表），每个 chunk 归属一个 section 并携带 `section_path`，引用可回查到章节路径。
-- 多轮会话会把最近历史送入 LLM，并使用历史中的最近用户问题辅助指代消解。
+- 三通道混合检索：SQLite FTS5 词面通道（中文双字分词 + LIKE 降级）与语义向量通道经 RRF（k=60）融合；检索通道（`vector`/`lexical`/`hybrid`）可在设置中切换，全过程有 trace；拒答阈值统一走 `threshold_score`（lexical-only 结果折减 0.5），消除跨通道阈值漂移。
+- 使用 DashScope `text-embedding-v3` 进行语义 embedding；没有有效 API Key 时保留 deterministic hashing fallback，方便离线开发和测试；fallback 切换带 60 秒冷却与恢复探测，切换/恢复均记录告警日志，不再永久静默降级。
+- 提示词注入防护：参考资料块带结构化定界符，`<source>`/`<user_question>` 标签形、`[资料 N]` 引用标记与「用户问题：」头均做转义，恶意文档无法伪造引用结构。
+- 文档解析输出层级化 Section 模型（`document_section` 表），每个 chunk 归属一个 section 并携带 `section_path`，引用可回查到章节路径；docx 表格按原文位置插入。
+- 多轮会话会把最近历史送入 LLM，并使用历史中的最近用户问题辅助指代消解；会话与用户消息先落库再调用 LLM，上游失败返回 502 且对话轮次保留。
 - 每条回答返回引用片段、相似度分数、检索 trace 和 token 使用量；支持五种学习任务模式（question/explain/compare/summarize/exercise）与隐私模式（local/hybrid/cloud）。
 - 上传采用分块落盘和大小限制，并立即返回 `202 processing`；解析、分块、embedding、Chroma 写入在进程内后台任务中完成，前端自动轮询最终状态，失败文档可以一键重试。
-- SQLite 是事实数据源，Chroma 是可重建索引；支持知识库级索引重建、数据导出与确认清理。
-- 后端 176 项 pytest、前端 47 项 Vitest、Ruff、Vite build 和依赖审计已接入 GitHub Actions。
+- SQLite 开启 WAL 与 `busy_timeout`；启动时自动恢复遗留 `processing` 文档，并对 Chroma 做孤儿向量对账回收（pytest 环境自动跳过以保护真实存储）。
+- 7 个列表端点统一 `limit/offset` 分页（默认 100、上限 500）；`/api/admin/export` 改为流式 JSON 导出，内存峰值受批次约束。
+- SQLite 是事实数据源，Chroma 是可重建索引；知识库级索引重建带防重入守卫与失败补偿；数据导出与确认清理齐备。
+- 数据库结构变更由 `schema_migrations` 版本化迁移管理（幂等，覆盖全新库与旧库升级）。
+- 后端 176 项 pytest、前端 47 项 Vitest、Ruff、mypy、覆盖率上报、Vite build 和依赖审计已接入 GitHub Actions（main 分支 CI 全绿）。
 
 远端仓库：[LBStruggleee/KnowFlow](https://github.com/LBStruggleee/KnowFlow)
 稳定版本以仓库 `main` 分支和对应 GitHub Actions 结果为准。
@@ -57,9 +61,10 @@ KnowFlow 是一个本地单用户的智能知识库问答应用，覆盖文档�
 
 - 结构化服务端日志和失败堆栈。
 - 上传大小限制、外部 API 超时、输入 trim 和路径安全检查。
-- SQLite 外键约束与事务处理，Chroma 外部资源失败时有补偿清理。
-- 启动时自动恢复遗留 `processing` 文档，并回填 FTS 索引。
-- GitHub Actions 自动执行后端/前端测试、静态检查、构建和依赖审计。
+- SQLite 外键约束与事务处理；连接级开启 WAL 与 `busy_timeout`；Chroma 外部资源失败时有补偿清理，启动时孤儿向量对账回收。
+- 启动时自动恢复遗留 `processing` 文档，并通过 `schema_migrations` 执行版本化迁移与 FTS 回填。
+- 数据库结构变更版本化管理，幂等迁移覆盖全新库与旧库升级。
+- GitHub Actions 自动执行后端/前端测试、Ruff 检查、mypy 类型检查、覆盖率上报、构建和依赖审计。
 
 ## 架构
 
@@ -110,19 +115,24 @@ KnowFlow/
 │   │   ├── models/          # SQLAlchemy 数据模型（含 DocumentSection、LearningRecord、SystemSetting）
 │   │   ├── schemas/         # Pydantic 输入/输出模型
 │   │   └── services/        # parser、chunker、lexical/hybrid/vector 检索、RAG、LLM、设置、启动恢复
-│   ├── tests/               # 单元测试和 API 集成测试（21 个测试文件）
+│   ├── tests/               # 单元测试和 API 集成测试（21 个测试文件，176 项）
 │   ├── storage/             # 本地上传文件和 Chroma 数据，已被 gitignore
+│   ├── pyproject.toml       # 后端项目元数据与工具配置（pytest/mypy/coverage）
 │   ├── requirements.txt     # 运行依赖
-│   └── requirements-dev.txt # 测试、lint 和审计工具
+│   └── requirements-dev.txt # 测试、lint、类型检查和审计工具
 ├── frontend/
 │   ├── src/
 │   │   ├── api/             # Axios API client 及其测试
 │   │   ├── demo/            # Liquid Glass 工作台：DemoApp、4 个视图、composables、纯函数、样式
 │   │   ├── assets/          # 静态资源
-│   │   └── main.js          # 应用入口
+│   │   └── main.js          # 应用入口（Element Plus 按需引入）
+│   ├── eslint.config.js     # ESLint 配置
 │   └── package.json
-├── docs/                    # 技术方案、系统 UML 图、设计文档与 superpowers 设计 spec
-├── superpowers/             # superpowers 工作流产物（.superpowers/sdd）
+├── docs/                    # 技术方案、系统 UML 图、设计文档、评估报告与 superpowers 设计 spec
+├── Dockerfile               # 后端镜像（python:3.13-slim，托管 frontend/dist 同源部署）
+├── docker-compose.yml       # 本地部署（绑定 127.0.0.1，数据/密钥卷挂载）
+├── CHANGELOG.md             # 版本演进概述
+├── .pre-commit-config.yaml  # ruff check/format 钩子
 ├── .github/workflows/ci.yml # GitHub Actions
 └── README.md
 ```
@@ -213,6 +223,7 @@ $env:PYTHONPATH = "."
 pytest tests -q
 ruff check app
 ruff format --check app
+mypy
 pip-audit -r requirements.txt --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
 ```
 
@@ -221,6 +232,7 @@ pip-audit -r requirements.txt --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2
 ```powershell
 cd D:\KnowFlow\frontend
 npm test
+npm run lint
 npm run build
 npm audit --audit-level=high
 ```
@@ -320,13 +332,16 @@ POST /api/kbs/{kb_id}/rebuild-index
 - [系统 UML 图](docs/系统UML图.md)：整体用例、领域模型与交互流程。
 - [技术方案](docs/技术方案.md)：架构设计与关键技术说明。
 - [CHANGELOG](CHANGELOG.md)：版本演进概述。
+- [专业评估报告](docs/项目评估报告-2026-10-12.md)：优化前 61 项问题的三分类评估基线。
+- [优化执行报告](docs/优化执行报告-2026-10-12.md)：7 个修复批次的执行记录与门禁。
+- [优化后复评报告](docs/项目评估报告-优化后-2026-10-12.md)：优化落地的逐条核实与残留问题清单。
 
 下一阶段：
 
 1. SSE 流式回答、请求取消和有限重试。
-2. 拆分剩余 `DemoApp.vue` 管理视图，按需加载 Element Plus，降低首屏 JS bundle。
+2. 补齐测试工程：Vue 组件挂载测试设施、覆盖率阈值门禁、测试与真实存储的完全隔离、kbs/conversations/admin 等端点分支测试。
 3. 用持久任务队列替换当前进程内后台任务，并增加任务租约、心跳、自动恢复和并发控制。
-4. Alembic 数据库迁移、用户认证授权和知识库权限。
+4. 用户认证授权和知识库权限（多用户场景前置条件）。
 5. 建立 Recall@K、MRR、拒答准确率和同义改写稳定性的 RAG 评测集。
 
 ## License
