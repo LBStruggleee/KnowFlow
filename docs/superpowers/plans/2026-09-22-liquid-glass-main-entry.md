@@ -1,5 +1,7 @@
 # Liquid Glass 正式入口切换 + 端到端验收 Implementation Plan
 
+> 状态：**已完成（2026-09-25 落地）**。正式入口已切换为 Liquid Glass 工作台（`index.html`/`src/main.js` 复用 `src/demo/DemoApp.vue`），根级 composable 已抽取为 `src/demo/composables/useWorkbenchState.js`，端到端验收通过；文中 checkbox 不再逐一勾选，完成情况以 git log 与 `frontend/src/**/*.test.js` 为准。注：文档写作时的“课程/学习助手”定位已于 2026-10 更新为通用知识库，视图现对应知识库/助手/记录/设置。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把已完成的 Liquid Glass 工作台切换为正式入口（`index.html`/`src/main.js`），抽取根级 composable，清理遗留代码，并完成 V1 端到端验收。

@@ -1,0 +1,12 @@
+# KnowFlow — local deployment only. Do not expose these ports to the public
+# internet: the app has no authentication, authorization, or rate limiting.
+services:
+  backend:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./backend/data:/app/backend/data
+      - ./backend/storage:/app/backend/storage
+      - ./backend/.env:/app/backend/.env:ro
+    restart: unless-stopped

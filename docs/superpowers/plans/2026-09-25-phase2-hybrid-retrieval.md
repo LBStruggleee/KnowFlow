@@ -1,5 +1,7 @@
 # Phase 2：混合检索 Implementation Plan
 
+> 状态：**已完成（2026-09-25 落地）**。全部任务已实现并合入 main；文中 checkbox 不再逐一勾选，完成情况以 git log 中 Phase 2 提交序列（`1b88c3b`…`f844994`、`0bcf696`）与 `backend/tests/test_lexical_search.py`、`test_hybrid_search.py`、`test_retrieval_settings.py` 为准。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 检索从单路向量升级为"向量 + 词面（FTS5 双字索引）"双通道 RRF 融合，中文术语可命中，通道可配、过程可 trace。

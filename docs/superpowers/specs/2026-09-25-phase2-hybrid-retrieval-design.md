@@ -1,6 +1,6 @@
 # Phase 2：混合检索（BM25 词面 + 向量 RRF）— 设计 Spec
 
-> 状态：设计评审中。批准后由 `superpowers:writing-plans` 生成逐任务 TDD 实施计划。
+> 状态：已实现（2026-09-25 落地，随 Phase 2 实施计划完成；`lexical_search.py`、`hybrid_search.py`、FTS 触发器与 `retrieval_channels` 设置均已上线）。
 > 总体方案：`docs/superpowers/plans/2026-09-24-knowflow-retrieval-upgrade.md`（Phase 2）
 
 **Goal:** 检索从单路向量 Top-K 升级为"向量 + 词面"双通道 RRF 融合，中文课程术语可被词面命中，通道可配、过程可 trace、可离线降级。

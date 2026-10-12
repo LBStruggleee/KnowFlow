@@ -1,0 +1,10 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.5
+    hooks:
+      - id: ruff
+        name: ruff-check backend
+        args: ["check", "backend"]
+      - id: ruff-format
+        name: ruff-format backend
+        args: ["format", "backend"]

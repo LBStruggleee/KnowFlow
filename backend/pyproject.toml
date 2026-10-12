@@ -1,0 +1,14 @@
+[project]
+name = "knowflow-backend"
+version = "0.3.0"
+description = "KnowFlow（知汇）——通用知识库 RAG 问答平台的后端 API"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["app"]

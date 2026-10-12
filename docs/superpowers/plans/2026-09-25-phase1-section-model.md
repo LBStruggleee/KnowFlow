@@ -1,5 +1,7 @@
 # Phase 1：层级化 Section 模型 Implementation Plan
 
+> 状态：**已完成（2026-09-25 落地）**。全部任务已实现并合入 main；文中 checkbox 不再逐一勾选，完成情况以 git log 中 Phase 1 提交序列与 `backend/tests/test_document_section.py`、`test_section_api.py`、`test_section_pipeline.py`、`test_section_search.py` 为准。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 解析器输出结构化文档树并落盘 `document_section` 表，每个 chunk 归属一个 section 且检索/问答结果携带 `section_path`。

@@ -33,7 +33,7 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="KnowFlow API",
         description="KnowFlow（知汇）——通用知识库 RAG 问答平台的后端 API",
-        version="0.2.0",
+        version="0.3.0",
     )
 
     Base.metadata.create_all(bind=engine)
