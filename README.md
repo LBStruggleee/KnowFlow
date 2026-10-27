@@ -1,6 +1,7 @@
 <p align="center">
   <img src="KnowFlow-logo-icon.png" alt="KnowFlow logo" width="160" />
 </p>
+
 # KnowFlow 知汇
 
 > 面向企业与个人的可追溯 RAG 知识库。把分散的资料变成可以检索、提问和复查来源的知识系统。
