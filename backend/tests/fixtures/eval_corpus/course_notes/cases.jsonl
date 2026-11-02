@@ -1,0 +1,30 @@
+{"id": "t01", "kind": "term", "question": "CAP 定理中 C、A、P 分别代表什么", "expected_section_paths": ["分布式系统基础 / 第1章 分布式系统概述 / 1.1 CAP 定理"], "expected_keywords": ["分区容错性"]}
+{"id": "t02", "kind": "term", "question": "BASE 里的软状态指什么", "expected_section_paths": ["分布式系统基础 / 第1章 分布式系统概述 / 1.2 BASE 理论"], "expected_keywords": ["Soft state"]}
+{"id": "t03", "kind": "term", "question": "Paxos 的两个阶段分别做什么", "expected_section_paths": ["共识算法 / 第2章 共识算法 / 2.1 Paxos"], "expected_keywords": ["Prepare"]}
+{"id": "t04", "kind": "term", "question": "Raft 用什么机制避免选票分裂", "expected_section_paths": ["共识算法 / 第2章 共识算法 / 2.2 Raft"], "expected_keywords": ["随机化选举超时"]}
+{"id": "t05", "kind": "term", "question": "ZAB 的恢复模式和广播模式有何区别", "expected_section_paths": ["共识算法 / 第2章 共识算法 / 2.3 ZAB 与多副本日志"], "expected_keywords": ["崩溃恢复"]}
+{"id": "t06", "kind": "term", "question": "什么是半同步复制", "expected_section_paths": ["数据复制 / 第3章 数据复制 / 3.1 主从复制"], "expected_keywords": ["半同步复制"]}
+{"id": "t07", "kind": "term", "question": "Quorum 读写为什么能读到最新写入", "expected_section_paths": ["数据复制 / 第3章 数据复制 / 3.3 无主复制与 Quorum"], "expected_keywords": ["R + W > N"]}
+{"id": "t08", "kind": "term", "question": "TCC 的三个操作分别做什么", "expected_section_paths": ["分布式事务 / 第4章 分布式事务 / 4.2 TCC 模式"], "expected_keywords": ["Try"]}
+{"id": "t09", "kind": "term", "question": "Saga 为什么不保证隔离性", "expected_section_paths": ["分布式事务 / 第4章 分布式事务 / 4.3 Saga 与最终一致"], "expected_keywords": ["隔离性"]}
+{"id": "t10", "kind": "term", "question": "Phi Accrual 故障检测算法怎么工作", "expected_section_paths": ["故障与容错 / 第5章 故障与容错 / 5.1 故障检测"], "expected_keywords": ["可疑程度"]}
+{"id": "s01", "kind": "structure", "question": "主从复制和多主复制在冲突处理上有什么取舍", "expected_section_paths": ["数据复制 / 第3章 数据复制 / 3.1 主从复制", "数据复制 / 第3章 数据复制 / 3.2 多主复制"], "expected_keywords": ["写冲突"]}
+{"id": "s02", "kind": "structure", "question": "两阶段提交和 TCC 的性能差异", "expected_section_paths": ["分布式事务 / 第4章 分布式事务 / 4.1 两阶段提交", "分布式事务 / 第4章 分布式事务 / 4.2 TCC 模式"], "expected_keywords": ["阻塞"]}
+{"id": "s03", "kind": "structure", "question": "如何防止脑裂导致的双写", "expected_section_paths": ["故障与容错 / 第5章 故障与容错 / 5.2 脑裂"], "expected_keywords": ["fencing token"]}
+{"id": "s04", "kind": "structure", "question": "熔断器和降级各自解决什么问题", "expected_section_paths": ["故障与容错 / 第5章 故障与容错 / 5.3 熔断与降级"], "expected_keywords": ["半开"]}
+{"id": "s05", "kind": "structure", "question": "Raft 中日志复制的完整流程", "expected_section_paths": ["共识算法 / 第2章 共识算法 / 2.2 Raft"], "expected_keywords": ["领导者"]}
+{"id": "s06", "kind": "structure", "question": "反熵修复属于哪种复制模型", "expected_section_paths": ["数据复制 / 第3章 数据复制 / 3.3 无主复制与 Quorum"], "expected_keywords": ["反熵"]}
+{"id": "s07", "kind": "structure", "question": "两阶段提交为什么会让参与者阻塞", "expected_section_paths": ["分布式事务 / 第4章 分布式事务 / 4.1 两阶段提交"], "expected_keywords": ["协调者"]}
+{"id": "s08", "kind": "structure", "question": "无状态服务的扩展瓶颈通常在哪里", "expected_section_paths": ["分布式系统基础 / 第1章 分布式系统概述 / 1.3 常见架构形态"], "expected_keywords": ["共享存储"]}
+{"id": "s09", "kind": "structure", "question": "租约和 fencing token 用来解决什么问题", "expected_section_paths": ["故障与容错 / 第5章 故障与容错 / 5.2 脑裂"], "expected_keywords": ["旧主"]}
+{"id": "s10", "kind": "structure", "question": "ZAB 新领导人为什么必须先同步旧领导人的未提交事务", "expected_section_paths": ["共识算法 / 第2章 共识算法 / 2.3 ZAB 与多副本日志"], "expected_keywords": ["未提交事务"]}
+{"id": "p01", "kind": "paraphrase", "question": "CAP 定理为什么三者不能同时满足", "expected_section_paths": ["分布式系统基础 / 第1章 分布式系统概述 / 1.1 CAP 定理"], "expected_keywords": ["分区容错性"], "variants": ["为什么 CAP 要求放弃一致性或可用性", "分布式系统能同时做到一致、可用和分区容错吗"]}
+{"id": "p02", "kind": "paraphrase", "question": "Raft 是怎么选出领导人的", "expected_section_paths": ["共识算法 / 第2章 共识算法 / 2.2 Raft"], "expected_keywords": ["选举超时"], "variants": ["Raft 选举流程是怎样的", "Raft 领导者选举如何工作"]}
+{"id": "p03", "kind": "paraphrase", "question": "主从复制为什么会丢数据", "expected_section_paths": ["数据复制 / 第3章 数据复制 / 3.1 主从复制"], "expected_keywords": ["异步复制"], "variants": ["异步复制丢数据的原因", "主从异步复制有什么风险"]}
+{"id": "p04", "kind": "paraphrase", "question": "TCC 为什么要求幂等", "expected_section_paths": ["分布式事务 / 第4章 分布式事务 / 4.2 TCC 模式"], "expected_keywords": ["幂等"], "variants": ["TCC 的空回滚保护是做什么的", "TCC 每个操作要注意什么"]}
+{"id": "p05", "kind": "paraphrase", "question": "集群被网络分区后怎样发现故障", "expected_section_paths": ["故障与容错 / 第5章 故障与容错 / 5.1 故障检测"], "expected_keywords": ["心跳"], "variants": ["心跳超时如何判定节点死亡", "分布式系统怎么检测节点故障"]}
+{"id": "p06", "kind": "paraphrase", "question": "熔断器的半开状态负责什么", "expected_section_paths": ["故障与容错 / 第5章 故障与容错 / 5.3 熔断与降级"], "expected_keywords": ["半开"], "variants": ["熔断半开状态的作用", "熔断器恢复时怎么放流量"]}
+{"id": "u01", "kind": "unanswerable", "question": "KnowFlow 的 PDF 结构解析用了哪个库"}
+{"id": "u02", "kind": "unanswerable", "question": "Kafka 如何实现精确一次语义"}
+{"id": "u03", "kind": "unanswerable", "question": "Rust 的所有权模型如何避免数据竞争"}
+{"id": "u04", "kind": "unanswerable", "question": "Transformer 自注意力的时间复杂度是多少"}
