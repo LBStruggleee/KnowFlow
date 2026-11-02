@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from typing import NamedTuple
 
 from docx import Document
 from docx.document import Document as DocxDocument
@@ -129,6 +130,9 @@ class ParsedSection(BaseModel):
 class ParsedDocument(BaseModel):
     sections: list[ParsedSection] = []
     lead_content: str = ""
+    # Where the heading tree came from. "none" means the document was parsed as
+    # flat text, which keeps the pre-structure behaviour inspectable in logs.
+    structure_source: str = "none"
 
 
 def assign_parent_orders(items: list[tuple[str, int, str]]) -> list[ParsedSection]:
@@ -320,6 +324,248 @@ def _parse_pptx_structure(file_path: Path) -> ParsedDocument:
     return ParsedDocument(sections=assign_parent_orders(items))
 
 
+# --- PDF structure ------------------------------------------------------
+# pypdf exposes per-fragment font metrics through extract_text(visitor_text=...),
+# which is what makes heading detection possible without swapping the parser for
+# a heavier dependency: no new runtime requirement, and the licence stays MIT.
+PDF_HEADING_MAX_CHARS = 80
+PDF_HEADING_SIZE_RATIO = 1.15
+PDF_HEADING_SIZE_TOLERANCE = 0.05
+PDF_MAX_HEADING_RATIO = 0.5
+
+
+class PdfLine(NamedTuple):
+    text: str
+    size: float
+    page_index: int
+
+
+def _pdf_page_lines(page, page_index: int) -> list[PdfLine]:
+    """Rebuild the visual lines of one page together with each line's font size.
+
+    pypdf already inserts newlines where it decides a line ends, so splitting
+    the visitor text on newlines yields reading-order lines while keeping the
+    font size that produced them.
+    """
+    lines: list[PdfLine] = []
+    parts: list[str] = []
+    sizes: list[float] = []
+
+    def flush() -> None:
+        text = " ".join(part for part in parts if part).strip()
+        if text:
+            lines.append(PdfLine(text=text, size=max(sizes, default=0.0), page_index=page_index))
+        parts.clear()
+        sizes.clear()
+
+    def visitor(text, cm, tm, font_dict, font_size) -> None:
+        if not text:
+            return
+        for index, chunk in enumerate(text.split("\n")):
+            if index:
+                flush()
+            chunk = chunk.strip()
+            if chunk:
+                parts.append(chunk)
+                sizes.append(float(font_size or 0.0))
+
+    page_text = page.extract_text(visitor_text=visitor)
+    flush()
+    if not lines and page_text and page_text.strip():
+        # No visitor callbacks happened (unusual layout): keep the page as one
+        # size-less block so the caller can still fall back to flat text.
+        lines.append(PdfLine(text=page_text.strip(), size=0.0, page_index=page_index))
+    return lines
+
+
+def _normalize_line(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip().casefold()
+
+
+def _body_font_size(lines: list[PdfLine]) -> float:
+    """Char-weighted mode of the font sizes: body text dominates headings."""
+    weights: dict[float, int] = {}
+    for line in lines:
+        if line.size > 0:
+            rounded = round(line.size, 1)
+            weights[rounded] = weights.get(rounded, 0) + len(line.text)
+    if not weights:
+        return 0.0
+    return max(weights, key=lambda size: (weights[size], size))
+
+
+def _repeated_line_keys(lines: list[PdfLine]) -> set[str]:
+    """Lines that appear on several pages are headers/footers, not headings."""
+    pages: dict[str, set[int]] = {}
+    for line in lines:
+        key = _normalize_line(line.text)
+        if 0 < len(key) <= PDF_HEADING_MAX_CHARS:
+            pages.setdefault(key, set()).add(line.page_index)
+    return {key for key, page_numbers in pages.items() if len(page_numbers) > 1}
+
+
+def _looks_like_heading(line: PdfLine, body_size: float, repeated: set[str]) -> bool:
+    text = line.text.strip()
+    if not text or len(text) > PDF_HEADING_MAX_CHARS:
+        return False
+    if body_size <= 0 or line.size < body_size * PDF_HEADING_SIZE_RATIO:
+        return False
+    if _normalize_line(text) in repeated or text.isdigit():
+        return False
+    return bool(re.search(r"[A-Za-z0-9\u4e00-\u9fff]", text))
+
+
+def _cluster_sizes(sizes: list[float]) -> list[float]:
+    """Collapse font sizes within tolerance so one size class means one level."""
+    representatives: list[float] = []
+    for size in sorted(set(sizes), reverse=True):
+        if (
+            not representatives
+            or abs(size - representatives[-1]) / representatives[-1] > PDF_HEADING_SIZE_TOLERANCE
+        ):
+            representatives.append(size)
+    return representatives
+
+
+def _level_for_size(size: float, representatives: list[float]) -> int:
+    for level, representative in enumerate(representatives, start=1):
+        if abs(size - representative) / representative <= PDF_HEADING_SIZE_TOLERANCE:
+            return min(level, 6)
+    return min(len(representatives) + 1, 6)
+
+
+def _pdf_font_structure(lines: list[PdfLine]) -> ParsedDocument:
+    """Derive a heading tree from font sizes when no usable outline exists."""
+    full_text = normalize_text("\n".join(line.text for line in lines))
+    body_size = _body_font_size(lines)
+    if body_size <= 0:
+        return ParsedDocument(lead_content=full_text)
+
+    repeated = _repeated_line_keys(lines)
+    heading_sizes = [line.size for line in lines if _looks_like_heading(line, body_size, repeated)]
+    if not heading_sizes or len(heading_sizes) > len(lines) * PDF_MAX_HEADING_RATIO:
+        return ParsedDocument(lead_content=full_text)
+
+    representatives = _cluster_sizes(heading_sizes)
+    items: list[tuple[str, int, str]] = []
+    lead_lines: list[str] = []
+    current: list[str] | None = None
+    current_title = ""
+    current_level = 0
+    for line in lines:
+        if _looks_like_heading(line, body_size, repeated):
+            if current is not None:
+                items.append((current_title, current_level, normalize_text("\n".join(current))))
+            current = []
+            current_title = line.text.strip()
+            current_level = _level_for_size(line.size, representatives)
+            continue
+        (current if current is not None else lead_lines).append(line.text)
+    if current is not None:
+        items.append((current_title, current_level, normalize_text("\n".join(current))))
+    if not items:
+        return ParsedDocument(lead_content=full_text)
+    return ParsedDocument(
+        sections=assign_parent_orders(items),
+        lead_content=normalize_text("\n".join(lead_lines)),
+        structure_source="font",
+    )
+
+
+def _pdf_outline_entries(reader: PdfReader) -> list[tuple[str, int, int]] | None:
+    """Return ``(title, page_index, depth)`` for usable bookmarks, else ``None``."""
+    try:
+        outline = reader.outline
+    except Exception:
+        return None
+    if not outline:
+        return None
+
+    entries: list[tuple[str, int, int]] = []
+
+    def walk(items, depth: int) -> None:
+        for item in items:
+            if isinstance(item, list):
+                walk(item, depth + 1)
+                continue
+            title = str(getattr(item, "title", "") or "").strip()
+            page_index = None
+            try:
+                page = item.page
+                if page is not None:
+                    page_index = reader.get_page_number(page)
+            except Exception:
+                page_index = None
+            if title and page_index is not None:
+                entries.append((title, page_index, depth))
+
+    walk(outline, 0)
+    if len(entries) < 2:
+        return None
+    if any(not re.search(r"[A-Za-z0-9\u4e00-\u9fff]", title) for title, _, _ in entries):
+        # Chinese PDFs often produce "?????" here when the outline uses a
+        # non-Unicode encoding; font-size detection is the better fallback.
+        return None
+    return entries
+
+
+def _pdf_outline_structure(reader: PdfReader, lines: list[PdfLine]) -> ParsedDocument | None:
+    """Build sections from bookmarks, anchoring each title to its text line."""
+    entries = _pdf_outline_entries(reader)
+    if entries is None or not lines:
+        return None
+
+    normalized = [_normalize_line(line.text) for line in lines]
+    positions: list[tuple[int, str, int]] = []
+    search_from = 0
+    for title, page_index, depth in entries:
+        key = _normalize_line(title)
+        found: int | None = None
+        for index in range(search_from, len(lines)):
+            candidate = normalized[index]
+            if len(candidate) < 3:
+                continue
+            if candidate.startswith(key) or key.startswith(candidate):
+                found = index
+                break
+        if found is None and 0 <= page_index < len(reader.pages):
+            for index in range(search_from, len(lines)):
+                if lines[index].page_index == page_index:
+                    found = index
+                    break
+        if found is None:
+            return None
+        positions.append((found, title, min(depth + 1, 6)))
+        search_from = found
+
+    positions.sort(key=lambda item: item[0])
+    items: list[tuple[str, int, str]] = []
+    lead_lines = [line.text for line in lines[: positions[0][0]]]
+    for index, (start, title, level) in enumerate(positions):
+        end = positions[index + 1][0] if index + 1 < len(positions) else len(lines)
+        body = "\n".join(line.text for line in lines[start + 1 : end])
+        items.append((title, level, normalize_text(body)))
+    return ParsedDocument(
+        sections=assign_parent_orders(items),
+        lead_content=normalize_text("\n".join(lead_lines)),
+        structure_source="outline",
+    )
+
+
+def _parse_pdf_structure(file_path: Path) -> ParsedDocument:
+    reader = PdfReader(str(file_path))
+    lines: list[PdfLine] = []
+    for page_index, page in enumerate(reader.pages):
+        lines.extend(_pdf_page_lines(page, page_index))
+    if not lines:
+        return ParsedDocument()
+
+    parsed = _pdf_outline_structure(reader, lines)
+    if parsed is not None and parsed.sections:
+        return parsed
+    return _pdf_font_structure(lines)
+
+
 def parse_document_structure(file_path: Path) -> ParsedDocument:
     suffix = file_path.suffix.lower()
     if suffix not in SUPPORTED_FILE_TYPES:
@@ -328,6 +574,8 @@ def parse_document_structure(file_path: Path) -> ParsedDocument:
 
     if suffix == ".md":
         return _parse_markdown_structure(file_path.read_text(encoding="utf-8"))
+    if suffix == ".pdf":
+        return _parse_pdf_structure(file_path)
     if suffix == ".docx":
         return _parse_docx_structure(file_path)
     if suffix == ".pptx":

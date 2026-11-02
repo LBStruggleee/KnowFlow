@@ -85,6 +85,12 @@ def process_document_record(db: Session, document_id: int) -> None:
     try:
         logger.info("Processing document id=%s name=%s", document.id, document.file_name)
         parsed = parse_document_structure(Path(document.file_path))
+        logger.info(
+            "Parsed document id=%s structure_source=%s sections=%s",
+            document.id,
+            parsed.structure_source,
+            len(parsed.sections),
+        )
         if not parsed.sections and not parsed.lead_content.strip():
             raise ValueError("No readable text was extracted from the document.")
 
