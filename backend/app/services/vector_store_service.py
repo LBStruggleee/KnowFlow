@@ -1,4 +1,6 @@
 import logging
+import os
+from pathlib import Path
 from typing import Any
 
 import chromadb
@@ -6,7 +8,9 @@ from app.core.database import BASE_DIR
 from app.models.document_chunk import DocumentChunk
 from app.services.embedding_service import embedding_service
 
-CHROMA_DIR = BASE_DIR / "storage" / "chroma"
+# KNOWFLOW_CHROMA_DIR lets an evaluation run (or a test) point the vector store
+# at a throwaway directory instead of the user's persisted index.
+CHROMA_DIR = Path(os.environ.get("KNOWFLOW_CHROMA_DIR") or BASE_DIR / "storage" / "chroma")
 UPSERT_BATCH_SIZE = 100
 logger = logging.getLogger(__name__)
 
