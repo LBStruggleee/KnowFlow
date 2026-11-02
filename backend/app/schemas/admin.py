@@ -32,6 +32,9 @@ class ProviderStatusRead(BaseModel):
     llm_provider: str
     llm_available: bool
     embedding_provider: str
+    embedding_mode: Literal["semantic", "hashing"]
+    embedding_degraded: bool
+    embedding_notice: str
     vector_collection: str
     privacy_mode: Literal["local", "hybrid", "cloud"]
 

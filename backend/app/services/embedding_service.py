@@ -4,7 +4,7 @@ import math
 import re
 import time
 from collections.abc import Callable
-from typing import Protocol
+from typing import Any, Literal, Protocol
 
 from app.core.config import is_api_key_configured, settings
 from fastapi import HTTPException, status
@@ -12,6 +12,14 @@ from openai import APIConnectionError, APIStatusError, OpenAI
 
 EMBEDDING_DIMENSION = 384
 FALLBACK_COOLDOWN_SECONDS = 60.0
+HASHING_INDEX_NAME = "hashing_v1"
+EMBEDDING_MODE_SEMANTIC = "semantic"
+EMBEDDING_MODE_HASHING = "hashing"
+type EmbeddingMode = Literal["semantic", "hashing"]
+EMBEDDING_DEGRADED_NOTICE = (
+    "当前向量通道使用本地哈希词袋（非语义检索）：未配置 DashScope API Key 或调用失败。"
+    "此模式下“语义检索”实际是词袋相似度，召回质量与评测结论都会受影响。"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -49,7 +57,7 @@ class HashingEmbeddingService:
 
     @property
     def index_name(self) -> str:
-        return "hashing_v1"
+        return HASHING_INDEX_NAME
 
 
 class DashScopeEmbeddingService:
@@ -170,6 +178,34 @@ class ResilientEmbeddingService:
     @property
     def index_name(self) -> str:
         return self.active.index_name
+
+    @property
+    def mode(self) -> str:
+        """``semantic`` when a real embedding model serves requests.
+
+        The hashing fallback is a bag-of-words projection, not a semantic
+        model, so callers that report or evaluate retrieval quality must say
+        which one is live instead of assuming "vector channel == semantic".
+        """
+        if self.active.index_name == HASHING_INDEX_NAME:
+            return EMBEDDING_MODE_HASHING
+        return EMBEDDING_MODE_SEMANTIC
+
+    @property
+    def degraded(self) -> bool:
+        return self.mode == EMBEDDING_MODE_HASHING
+
+
+def embedding_status() -> dict[str, Any]:
+    """Machine-readable view of which embedding backend is actually serving."""
+    mode = embedding_service.mode
+    degraded = mode == EMBEDDING_MODE_HASHING
+    return {
+        "embedding_provider": embedding_service.index_name,
+        "embedding_mode": mode,
+        "embedding_degraded": degraded,
+        "embedding_notice": EMBEDDING_DEGRADED_NOTICE if degraded else "",
+    }
 
 
 def _tokenize(text: str) -> list[str]:

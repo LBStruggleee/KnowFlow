@@ -227,3 +227,16 @@ def test_system_prompt_describes_source_delimiters() -> None:
     assert "<source>" in SYSTEM_PROMPT
     assert "不可信" in SYSTEM_PROMPT
     assert "忽略" in SYSTEM_PROMPT
+
+
+def test_answer_trace_reports_embedding_mode(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.rag_service.llm_service", _FakeLLMService())
+    _patch_hybrid(monkeypatch, [_source(1, "命中内容", score=0.9)], VECTOR_SEMANTICS)
+
+    result = rag_service.answer(
+        kb_id=1, question="问题", top_k=1, score_threshold=0.0, privacy_mode="cloud", db=None
+    )
+
+    embedding = result["retrieval_trace"]["embedding"]
+    assert embedding["embedding_mode"] in {"semantic", "hashing"}
+    assert embedding["embedding_degraded"] is (embedding["embedding_mode"] == "hashing")

@@ -50,6 +50,11 @@ const privacyDescription = computed(() => ({
   hybrid: '原始资料保留在本机，仅将命中的少量片段发送给已配置的回答模型。',
   cloud: '允许使用云端回答模型；原始文件仍保存在本地。',
 }[privacyMode.value]))
+const embeddingDegraded = computed(() => Boolean(currentProviders.value?.embedding_degraded))
+const embeddingNotice = computed(
+  () => currentProviders.value?.embedding_notice
+    || '当前向量通道使用本地哈希词袋（非语义检索），召回质量与评测结论都会受影响。',
+)
 const providers = computed(() => [
   {
     id: 'llm',
@@ -64,8 +69,8 @@ const providers = computed(() => [
     name: currentProviders.value?.embedding_provider || '本地向量模型',
     role: '文本向量化',
     location: '本地',
-    status: '可用',
-    healthy: true,
+    status: embeddingDegraded.value ? '非语义' : '语义',
+    healthy: !embeddingDegraded.value,
   },
   {
     id: 'index',
@@ -260,6 +265,11 @@ async function clearData() {
             >
               <span class="provider-mark">{{ provider.name.slice(0, 1).toUpperCase() }}</span><span><strong>{{ provider.name }}</strong><em>{{ provider.role }}</em></span><span class="provider-location">{{ provider.location }}</span><span :class="['provider-status', { unavailable: !provider.healthy }]"><i />{{ provider.status }}</span>
             </div>
+          </div><div
+            v-if="embeddingDegraded"
+            class="setting-note"
+          >
+            <el-icon><DataLine /></el-icon><p><strong>向量通道已降级</strong>{{ embeddingNotice }}</p>
           </div>
         </section>
 
