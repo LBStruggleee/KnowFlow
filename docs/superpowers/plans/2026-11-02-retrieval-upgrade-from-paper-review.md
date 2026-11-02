@@ -19,7 +19,7 @@
 | GitHub 仓库 | `LBStruggleee/KnowFlow`（public，默认分支 `main`），`gh` 已登录 |
 | remote | 已由 SSH 改为 HTTPS：`https://github.com/LBStruggleee/KnowFlow.git`（原 SSH 22 端口在本机被中间设备阻断） |
 | 同步状态 | `main` 与 `origin/main` 完全一致（`bb4d559`），工作区干净 |
-| 本地测试基线 | 后端 `176 passed`（`pytest tests -q`） |
+| 本地测试基线 | 后端收集 **176 条**（构建过 `frontend/dist` 时 176 passed；未构建时 175 passed + 1 skipped，CI 后端任务属于后者；skip 项为 `test_root_serves_spa_index_when_dist_exists`） |
 | 技术探针 | pypdf 6.19 的 `PageObject.extract_text(visitor_text=...)` 实测可拿到 `font_size` 与 `/BaseFont`；`PdfReader.outline` 可读真实书签 → **PDF 结构解析首版不需要新增依赖** |
 
 ---
@@ -106,6 +106,7 @@ T4 文档收尾 + PR 交付
 | **T1.3** 评测 CLI | 临时 KB 建索引 → 跑 `vector/lexical/hybrid` × `真标题路径/打乱标题路径(placebo)` → 输出 JSON + Markdown | 新增 `backend/scripts/eval_retrieval.py`；复用 `document_processing_service` | `--smoke` 秒级可跑；报告注明 embedding 模式与 chunk 参数；placebo 对比表可读 |
 | **T1.4** embedding 模式明示 | `/api/health` 增 `embedding_mode`（`semantic`/`hashing`）与 `degraded`；chat `retrieval_trace` 增同名字段；前端 Settings 对降级态加说明文案 | `app/api/health.py`、`app/api/admin.py`、`app/services/rag_service.py`、`frontend/src/demo/views/SettingsView.vue`、`test_api.py`/`test_rag_service.py` | 未配 key 时 `degraded=true` 且文案明确"当前为词袋匹配，非语义检索"；字段只增不删 |
 | **T1.5** 基线报告 | 首次基线结果归档 | 新增 `docs/检索评测基线-2026-11.md` | 含各通道 × k 的指标表、结论、复现命令、embedding 模式 |
+| **T1.6** 索引一致性可见（审查 P1 增补） | 向量按提供方分集合，降级期写入的 chunk 在切回主集合后于向量通道不可见。`health`/`admin/providers` 暴露**两个集合各自的 chunk 数**，非 active 集合非空时给 `index_stale` + `stale_chunks` 标记；前端设置页提示"待重建"并指向知识库重建入口 | `app/services/vector_store_service.py`、`app/schemas/admin.py`、`app/api/admin.py`、`app/api/health.py`、`frontend/src/demo/views/SettingsView.vue`、新增 `tests/test_vector_index_status.py` | 反向分裂（主集合 vs 哈希集合）各有用例；未见分裂时 `index_stale=false`；现有响应字段只增不删；不做双集合联合检索（分数不可比） |
 
 **测试补充要求**：T1.4 必须覆盖"有 key / 无 key"两条分支（用 monkeypatch 改 settings，不改真实 .env）。
 
@@ -164,7 +165,8 @@ T4 文档收尾 + PR 交付
 3. 扫描件/无字号 PDF 不报错，退回平铺，`structure_source=none`。
 4. 注入样本 chunk 被标记，检索 trace 里有过滤计数；正常文档零误报。
 5. `/api/health` 与 chat trace 能明确回答"当前向量通道是不是语义的"。
-6. 后端测试数从 176 只增不减；Ruff/mypy/前端构建全绿。
+6. `/api/health` 与 `/api/admin/providers` 能回答"向量索引是否分裂、有多少 chunk 需要重建"（T1.6）。
+7. 后端测试收集数从 176 只增不减（当前 235）；Ruff/mypy/前端构建全绿。
 
 ---
 
@@ -204,6 +206,7 @@ T4 文档收尾 + PR 交付
 
 > T1.4（embedding 模式明示）排在 T1.3 之前：先让评测报告能记录"当前向量通道是不是语义的"，否则 T1.5 的基线数字本身带歧义。
 > T2.1 是**门禁式任务**：若真实 PDF 的字号/书签可得率不足以支撑启发式，先在 T2.1 汇报并停在 T2.1，不硬写 T2.2/T2.3。
+> **T1.6（索引一致性可见）** 是 2026-11-02 代码审查 P1 的增补卡：T1.4 只解决"模式可见"，不解决"数据可见"——降级期写入的 chunk 在切回主集合后于向量通道不可见，必须靠状态接口暴露。排在 T1.5 之后、T2 之前完成。
 
 ---
 
@@ -218,6 +221,7 @@ T4 文档收尾 + PR 交付
 | T1.4 | `embedding_mode` 明示（health/提供商/问答 trace + 设置页降级提示） | `a0f78d8` feat(embedding): 明示向量通道模式 |
 | T1.3 | 离线评测 CLI（三通道 × 标题路径安慰剂，隔离临时库/索引） | `02c2904` feat(eval): 新增离线检索评测 CLI |
 | T1.5 | 首次基线报告 | `a4e9df9` docs(eval): 归档首次检索评测基线 |
+| T1.6 | 索引一致性可见（审查 P1 增补）：双集合计数 + `index_stale` 标记 + 设置页待重建提示 | 见本次审查修订 commit（`feat(index)`） |
 | T2.1 | 真实 PDF 探针（3 份样本，字号覆盖 100%）→ 门禁通过 | 见 8.3 |
 | T2.2–T2.6 | PDF outline + 字号启发式解析、接入章节树/分块/重试、测试 | `81ead3f` feat(pdf): PDF 结构解析 |
 | T2.7 | PDF 评测语料 + `--flat-pdf` 前后对照 + 安慰剂对照 | `65b599f` test(eval) / `dd0ecaf` docs |
@@ -232,7 +236,7 @@ T4 文档收尾 + PR 交付
 | `ruff format --check backend` | 80 files already formatted |
 | `ruff check backend` | All checks passed |
 | `mypy`（backend） | Success: no issues found in 51 source files |
-| `pytest backend/tests` | **230 passed**（基线 176，新增 54 个用例），覆盖率 91% |
+| `pytest backend/tests` | **235 passed**（构建过 `frontend/dist` 时；未构建时 234 passed + 1 skipped，CI 后端任务属于后者）。基线口径：收集 176 → 176 passed / 175 passed + 1 skipped，本轮新增 59 个用例 |
 | 前端 `npm run lint` / `npm test` / `npm run build` | 通过 / 47 passed / 构建通过（JS 473.60 kB） |
 
 ### 8.3 T2.1 门禁结论（通过）

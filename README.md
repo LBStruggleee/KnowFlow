@@ -23,7 +23,7 @@ KnowFlow 是一个本地单用户的智能知识库问答应用，覆盖文档�
 - 7 个列表端点统一 `limit/offset` 分页（默认 100、上限 500）；`/api/admin/export` 改为流式 JSON 导出，内存峰值受批次约束。
 - SQLite 是事实数据源，Chroma 是可重建索引；知识库级索引重建带防重入守卫与失败补偿；数据导出与确认清理齐备。
 - 数据库结构变更由 `schema_migrations` 版本化迁移管理（幂等，覆盖全新库与旧库升级）。
-- 后端 176 项 pytest、前端 47 项 Vitest、Ruff、mypy、覆盖率上报、Vite build 和依赖审计已接入 GitHub Actions（main 分支 CI 全绿）。
+- 后端 235 项 pytest（构建过 `frontend/dist` 时为 235 passed；未构建时 234 passed + 1 skipped）、前端 47 项 Vitest、Ruff、mypy、覆盖率上报、Vite build 和依赖审计已接入 GitHub Actions（main 分支 CI 全绿）。
 
 远端仓库：[LBStruggleee/KnowFlow](https://github.com/LBStruggleee/KnowFlow)
 稳定版本以仓库 `main` 分支和对应 GitHub Actions 结果为准。
@@ -46,6 +46,7 @@ KnowFlow 是一个本地单用户的智能知识库问答应用，覆盖文档�
 
 - 三通道混合检索：FTS5 词面检索 + 语义向量检索 + RRF 融合，中文术语可被词面命中。
 - 检索通道可在系统设置中切换（`vector` / `lexical` / `hybrid`，默认 `hybrid`）。
+- 向量索引一致性可见：向量按 embedding 提供方分集合存储，`/api/health` 与 `/api/admin/providers` 报告各集合的 chunk 数与 `index_stale` 标记；切换提供方或降级期间写入过数据时，设置页会提示「向量索引待重建」并指向知识库的重建索引入口。
 - 支持多轮上下文，历史窗口受消息数和字符数双重限制。
 - 回答严格要求基于参考资料；资料中的指令会被视为不可信内容。
 - 展示引用来源、chunk、分数、请求 Top K、返回数量和阈值判断。
@@ -120,7 +121,7 @@ KnowFlow/
 │   │   ├── models/          # SQLAlchemy 数据模型（含 DocumentSection、LearningRecord、SystemSetting）
 │   │   ├── schemas/         # Pydantic 输入/输出模型
 │   │   └── services/        # parser、chunker、lexical/hybrid/vector 检索、RAG、LLM、设置、启动恢复
-│   ├── tests/               # 单元测试和 API 集成测试（21 个测试文件，176 项）
+│   ├── tests/               # 单元测试和 API 集成测试（26 个测试文件，235 项）
 │   ├── storage/             # 本地上传文件和 Chroma 数据，已被 gitignore
 │   ├── pyproject.toml       # 后端项目元数据与工具配置（pytest/mypy/coverage）
 │   ├── requirements.txt     # 运行依赖
@@ -242,7 +243,7 @@ npm run build
 npm audit --audit-level=high
 ```
 
-GitHub Actions 会在 push 和 pull request 时执行同类检查。当前验证基线为后端 176 项 pytest、前端 47 项 Vitest 测试全部通过。
+GitHub Actions 会在 push 和 pull request 时执行同类检查。当前验证基线为后端 235 项 pytest（构建过前端产物时为 235 passed，未构建时 234 passed + 1 skipped）、前端 47 项 Vitest 测试。
 
 ## 主要 API
 
