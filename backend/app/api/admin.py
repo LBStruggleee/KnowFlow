@@ -21,6 +21,7 @@ from app.schemas.admin import (
     SystemSettingsUpdate,
     SystemStatusRead,
     TokenUsageRead,
+    VectorIndexStatusRead,
 )
 from app.services.embedding_service import EmbeddingMode, embedding_status
 from app.services.llm_service import llm_service
@@ -82,6 +83,7 @@ def get_provider_status(db: Session = Depends(get_db)) -> ProviderStatusRead:
         embedding_degraded=bool(embedding["embedding_degraded"]),
         embedding_notice=str(embedding["embedding_notice"]),
         vector_collection=vector_store_service.collection_name,
+        vector_index=VectorIndexStatusRead(**vector_store_service.index_status()),
         privacy_mode=config["privacy_mode"],
     )
 

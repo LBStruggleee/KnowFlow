@@ -118,10 +118,46 @@ class VectorStoreService:
             )
         return matches
 
+    def known_index_names(self) -> list[str]:
+        """Every embedding backend this service may have written vectors for."""
+        return sorted({embedding_service.primary.index_name, embedding_service.fallback.index_name})
+
     def known_collections(self) -> list[Any]:
         """Every collection this service may have written to."""
-        index_names = {embedding_service.primary.index_name, embedding_service.fallback.index_name}
-        return [self._collection_for(index_name) for index_name in index_names]
+        return [self._collection_for(index_name) for index_name in self.known_index_names()]
+
+    def index_status(self) -> dict[str, Any]:
+        """Per-collection chunk counts plus a stale-index marker.
+
+        Vectors are partitioned by embedding backend and ``search`` only queries
+        the active collection, so a document ingested while the primary provider
+        was degraded stays invisible to the vector channel after recovery until
+        the knowledge base is rebuilt. Nothing else in the API surfaces that
+        split, which is why it is reported here explicitly instead of being left
+        for the user to notice as "召回莫名其妙少了一块".
+        """
+        active_index = embedding_service.index_name
+        counts = {
+            index_name: self._collection_for(index_name).count()
+            for index_name in self.known_index_names()
+        }
+        stale = [
+            {
+                "index_name": index_name,
+                "collection": _collection_name(index_name),
+                "chunks": chunk_count,
+            }
+            for index_name, chunk_count in sorted(counts.items())
+            if index_name != active_index and chunk_count > 0
+        ]
+        return {
+            "active_index_name": active_index,
+            "active_collection": _collection_name(active_index),
+            "active_chunks": counts.get(active_index, 0),
+            "stale_collections": stale,
+            "stale_chunks": sum(entry["chunks"] for entry in stale),
+            "index_stale": bool(stale),
+        }
 
 
 def _chunk_vector_id(chunk_id: int) -> str:

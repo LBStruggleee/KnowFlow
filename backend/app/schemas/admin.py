@@ -28,6 +28,27 @@ class SystemSettingsUpdate(BaseModel):
     retrieval_channels: str | None = Field(default=None)
 
 
+class VectorIndexCollectionRead(BaseModel):
+    index_name: str
+    collection: str
+    chunks: int
+
+
+class VectorIndexStatusRead(BaseModel):
+    """Visibility for the per-provider vector collections.
+
+    ``index_stale`` means chunks exist in a non-active collection: those chunks
+    are unreachable on the vector channel until the knowledge base is rebuilt.
+    """
+
+    active_index_name: str
+    active_collection: str
+    active_chunks: int
+    stale_collections: list[VectorIndexCollectionRead]
+    stale_chunks: int
+    index_stale: bool
+
+
 class ProviderStatusRead(BaseModel):
     llm_provider: str
     llm_available: bool
@@ -36,6 +57,7 @@ class ProviderStatusRead(BaseModel):
     embedding_degraded: bool
     embedding_notice: str
     vector_collection: str
+    vector_index: VectorIndexStatusRead
     privacy_mode: Literal["local", "hybrid", "cloud"]
 
 

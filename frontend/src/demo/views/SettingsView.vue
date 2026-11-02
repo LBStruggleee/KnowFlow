@@ -55,6 +55,16 @@ const embeddingNotice = computed(
   () => currentProviders.value?.embedding_notice
     || '当前向量通道使用本地哈希词袋（非语义检索），召回质量与评测结论都会受影响。',
 )
+const vectorIndex = computed(() => currentProviders.value?.vector_index || null)
+const indexStale = computed(() => Boolean(vectorIndex.value?.index_stale))
+const indexStaleNotice = computed(() => {
+  const staleChunks = vectorIndex.value?.stale_chunks || 0
+  const staleCollections = (vectorIndex.value?.stale_collections || [])
+    .map((entry) => entry.collection)
+    .join('、')
+  return `有 ${staleChunks} 个片段停留在旧向量集合（${staleCollections}），`
+    + '当前集合搜不到它们。请到对应知识库执行「重建索引」，否则这部分资料在向量检索中缺失。'
+})
 const providers = computed(() => [
   {
     id: 'llm',
@@ -77,8 +87,8 @@ const providers = computed(() => [
     name: currentProviders.value?.vector_collection || 'knowflow_chunks',
     role: '向量索引',
     location: '本地',
-    status: '可用',
-    healthy: true,
+    status: indexStale.value ? '待重建' : '可用',
+    healthy: !indexStale.value,
   },
 ])
 
@@ -270,6 +280,11 @@ async function clearData() {
             class="setting-note"
           >
             <el-icon><DataLine /></el-icon><p><strong>向量通道已降级</strong>{{ embeddingNotice }}</p>
+          </div><div
+            v-if="indexStale"
+            class="setting-note"
+          >
+            <el-icon><Refresh /></el-icon><p><strong>向量索引待重建</strong>{{ indexStaleNotice }}</p>
           </div>
         </section>
 
