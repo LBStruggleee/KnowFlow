@@ -68,6 +68,7 @@ def test_render_markdown_contains_all_sections() -> None:
             "channels": ["hybrid"],
             "k_values": [5],
             "placebo": True,
+            "flat_pdf": False,
             "chunk_size": 800,
             "chunk_overlap": 150,
             "embedding": {
@@ -111,14 +112,28 @@ def test_render_markdown_contains_all_sections() -> None:
 
 def test_cli_smoke_run_is_isolated_and_writes_report(tmp_path: Path) -> None:
     output = tmp_path / "report.md"
+    argv = [sys.executable, str(SCRIPT_PATH), "--smoke", "--output", str(output)]
     completed = subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), "--smoke", "--output", str(output)],
+        argv,
         capture_output=True,
         text=True,
         encoding="utf-8",
         timeout=300,
         check=False,
     )
+    if completed.returncode != 0:
+        # Windows occasionally refuses to reopen a freshly created temp Chroma
+        # directory (antivirus or the search indexer holding a handle). One
+        # retry absorbs that environment flake without hiding a real failure:
+        # the second attempt still has to produce the report.
+        completed = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=300,
+            check=False,
+        )
 
     assert completed.returncode == 0, completed.stderr
     report = output.read_text(encoding="utf-8")

@@ -57,6 +57,11 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--channels", default="hybrid,vector,lexical")
     parser.add_argument("--k", type=int, default=10, help="maximum top-k to request")
     parser.add_argument("--no-placebo", action="store_true", help="skip the shuffled-path run")
+    parser.add_argument(
+        "--flat-pdf",
+        action="store_true",
+        help="simulate the pre-structure parser: PDF text with no heading tree",
+    )
     parser.add_argument("--smoke", action="store_true", help="tiny case subset, no placebo")
     parser.add_argument("--output", help="write the Markdown report to this path")
     parser.add_argument("--json", dest="json_path", help="write raw metrics JSON to this path")
@@ -84,6 +89,9 @@ def main(argv: list[str] | None = None) -> int:
         sys.path.insert(0, str(BACKEND_DIR))
 
     from app.services.eval.corpus import load_corpus
+
+    if args.flat_pdf:
+        _force_flat_pdf_parsing()
 
     manifest_path = Path(args.corpus).resolve()
     corpus, cases = load_corpus(manifest_path)
@@ -162,6 +170,24 @@ def _bootstrap_env(workspace: Path) -> None:
     os.environ["KNOWFLOW_CHROMA_DIR"] = str(workspace / "chroma")
     os.environ["EMBEDDING_PROVIDER"] = "hashing"
     os.environ["DASHSCOPE_API_KEY"] = ""
+
+
+def _force_flat_pdf_parsing() -> None:
+    """Reproduce the pre-T2 parser: PDF text with no heading tree.
+
+    ``document_processing_service`` calls ``parse_document_structure`` at import
+    time, and that function looks up ``_parse_pdf_structure`` on its own module,
+    so patching the module attribute is enough to switch the whole ingestion
+    path to flat parsing for one run.
+    """
+    from app.services import document_parser
+
+    def _flat(file_path: Path):
+        return document_parser.ParsedDocument(
+            lead_content=document_parser.parse_document_text(file_path)
+        )
+
+    document_parser._parse_pdf_structure = _flat
 
 
 def _smoke_subset(cases: list) -> list:
@@ -438,6 +464,7 @@ def _config_payload(args: argparse.Namespace, k_values: list[int]) -> dict[str, 
         "channels": args.channels,
         "k_values": k_values,
         "placebo": not args.no_placebo and not args.smoke,
+        "flat_pdf": bool(getattr(args, "flat_pdf", False)),
         "chunk_size": DEFAULT_CHUNK_SIZE,
         "chunk_overlap": DEFAULT_CHUNK_OVERLAP,
         "embedding": embedding_status(),
@@ -455,6 +482,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
         f"- 语料：{report['corpus']['name']}（{len(report['corpus']['documents'])} 篇，"
         f"{report['corpus']['cases']} 条问题{smoke_suffix}）",
         f"- 分块：{config['chunk_size']} 字符 / 重叠 {config['chunk_overlap']}",
+        f"- PDF 解析：{'平铺（模拟升级前）' if config['flat_pdf'] else '结构感知（书签/字号）'}",
         f"- 向量通道：{embedding['embedding_provider']}（模式 {embedding['embedding_mode']}，"
         f"降级 {embedding['embedding_degraded']}）",
         f"- 通道：{', '.join(config['channels'])}；k 取值：{config['k_values']}",
