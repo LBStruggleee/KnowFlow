@@ -17,6 +17,7 @@ already-current database, because create_all may have pre-applied it.
 import logging
 from collections.abc import Callable
 
+from app.services.injection_backfill import backfill_injection_flags
 from app.services.lexical_search import (
     backfill_search_text,
     ensure_chunk_columns,
@@ -41,6 +42,11 @@ def _migrate_backfill_search_text(engine: Engine) -> None:
         backfill_search_text(db)
 
 
+def _migrate_backfill_injection_flags(engine: Engine) -> None:
+    with Session(bind=engine) as db:
+        backfill_injection_flags(db)
+
+
 # Ordered, idempotent steps. The order mirrors the historical startup
 # sequence: columns must exist before the FTS index is built over them, and
 # the FTS UPDATE trigger keeps the index in sync while the backfill commits.
@@ -48,6 +54,10 @@ MIGRATIONS: list[tuple[int, str, Callable[[Engine], object]]] = [
     (1, "ensure_chunk_columns", ensure_chunk_columns),
     (2, "ensure_lexical_index", ensure_lexical_index),
     (3, "backfill_search_text", _migrate_backfill_search_text),
+    # Databases that already recorded version 1 skip the column step above, so
+    # the injection columns get their own idempotent pass before the backfill.
+    (4, "ensure_injection_columns", ensure_chunk_columns),
+    (5, "backfill_injection_flags", _migrate_backfill_injection_flags),
 ]
 
 

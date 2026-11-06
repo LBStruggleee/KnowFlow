@@ -18,15 +18,23 @@ DEFAULT_SETTINGS: dict[str, tuple[str, str]] = {
     "privacy_mode": ("hybrid", "资料处理模式：local、hybrid 或 cloud"),
     "glass_variant": ("balanced", "界面玻璃材质强度"),
     "retrieval_channels": ("hybrid", "检索通道：vector、lexical 或 hybrid"),
+    "injection_filter_mode": ("downweight", "摄入侧注入筛查处置：off、downweight 或 exclude"),
+    "injection_downweight": ("0.5", "命中注入标记块的降权系数，0 到 1"),
 }
 
 
 RETRIEVAL_CHANNELS = ("vector", "lexical", "hybrid")
+INJECTION_FILTER_MODES = ("off", "downweight", "exclude")
 
 
 def normalize_retrieval_channels(value: object) -> str:
     text = str(value or "").strip().lower()
     return text if text in RETRIEVAL_CHANNELS else "hybrid"
+
+
+def normalize_injection_filter_mode(value: object) -> str:
+    text = str(value or "").strip().lower()
+    return text if text in INJECTION_FILTER_MODES else "downweight"
 
 
 def ensure_default_settings(db: Session) -> None:
@@ -55,6 +63,8 @@ def update_settings(db: Session, payload: dict[str, object]) -> dict[str, str]:
             continue
         if key == "retrieval_channels":
             value = normalize_retrieval_channels(value)
+        if key == "injection_filter_mode":
+            value = normalize_injection_filter_mode(value)
         setting = db.get(SystemSetting, key)
         if setting is None:
             setting = SystemSetting(
@@ -72,6 +82,7 @@ def update_settings(db: Session, payload: dict[str, object]) -> dict[str, str]:
 PrivacyMode = Literal["local", "hybrid", "cloud"]
 GlassVariant = Literal["clear", "balanced", "contrast"]
 RetrievalChannel = Literal["vector", "lexical", "hybrid"]
+InjectionFilterMode = Literal["off", "downweight", "exclude"]
 
 
 class TypedSettings(TypedDict):
@@ -84,6 +95,8 @@ class TypedSettings(TypedDict):
     privacy_mode: PrivacyMode
     glass_variant: GlassVariant
     retrieval_channels: RetrievalChannel
+    injection_filter_mode: InjectionFilterMode
+    injection_downweight: float
 
 
 def typed_settings(db: Session) -> TypedSettings:
@@ -102,6 +115,13 @@ def typed_settings(db: Session) -> TypedSettings:
         "retrieval_channels": cast(
             RetrievalChannel, normalize_retrieval_channels(values["retrieval_channels"])
         ),
+        "injection_filter_mode": cast(
+            InjectionFilterMode,
+            normalize_injection_filter_mode(values["injection_filter_mode"]),
+        ),
+        "injection_downweight": _coerce_ratio(
+            values["injection_downweight"], "injection_downweight"
+        ),
     }
 
 
@@ -118,3 +138,18 @@ def _coerce_setting[T](raw: str, key: str, converter: Callable[[str], T]) -> T:
             default,
         )
         return converter(default)
+
+
+def _coerce_ratio(raw: str, key: str) -> float:
+    """Clamp a 0..1 ratio setting, falling back to its default when unusable."""
+    value = _coerce_setting(raw, key, float)
+    if not 0.0 <= value <= 1.0:
+        default = float(DEFAULT_SETTINGS[key][0])
+        logger.warning(
+            "Stored setting %s=%r is outside 0..1; falling back to default %r",
+            key,
+            raw,
+            default,
+        )
+        return default
+    return value

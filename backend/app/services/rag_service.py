@@ -2,7 +2,13 @@ import re
 from typing import Any
 
 from app.services.embedding_service import embedding_status
-from app.services.hybrid_search import RRF_SEMANTICS, search_hybrid, threshold_score
+from app.services.hybrid_search import (
+    DEFAULT_INJECTION_DOWNWEIGHT,
+    DEFAULT_INJECTION_MODE,
+    RRF_SEMANTICS,
+    search_hybrid,
+    threshold_score,
+)
 from app.services.llm_service import llm_service
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -40,10 +46,18 @@ class RagService:
         privacy_mode: str = "hybrid",
         db: Session | None = None,
         channels: str = "hybrid",
+        injection_mode: str = DEFAULT_INJECTION_MODE,
+        injection_downweight: float = DEFAULT_INJECTION_DOWNWEIGHT,
     ) -> dict[str, Any]:
         retrieval_query = _build_retrieval_query(question, history or [])
         hybrid = search_hybrid(
-            db, kb_id=kb_id, query=retrieval_query, top_k=top_k, channels=channels
+            db,
+            kb_id=kb_id,
+            query=retrieval_query,
+            top_k=top_k,
+            channels=channels,
+            injection_mode=injection_mode,
+            injection_downweight=injection_downweight,
         )
         sources = hybrid.hits
         score_semantics = hybrid.trace.get("score_semantics", RRF_SEMANTICS)

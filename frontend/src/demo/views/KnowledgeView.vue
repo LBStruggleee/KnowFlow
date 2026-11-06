@@ -456,7 +456,11 @@ onBeforeUnmount(() => {
               :key="chunk.id"
               class="chunk-item"
             >
-              <em>#{{ chunk.chunk_index }} · {{ chunk.token_count }} tokens</em>{{ truncatePreview(chunk.content) }}
+              <em>#{{ chunk.chunk_index }} · {{ chunk.token_count }} tokens<span
+                v-if="chunk.injection_flag"
+                class="chunk-flag"
+                :title="`命中规则：${(chunk.injection_rules || []).join('、')}（检索时会被降权）`"
+              >疑似注入</span></em>{{ truncatePreview(chunk.content) }}
             </p>
           </template>
         </div>

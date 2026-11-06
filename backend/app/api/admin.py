@@ -27,6 +27,7 @@ from app.services.embedding_service import EmbeddingMode, embedding_status
 from app.services.llm_service import llm_service
 from app.services.settings_service import (
     GlassVariant,
+    InjectionFilterMode,
     PrivacyMode,
     RetrievalChannel,
     typed_settings,
@@ -58,8 +59,8 @@ def patch_system_settings(
     db: Session = Depends(get_db),
 ) -> SystemSettingsRead:
     values = update_settings(db, payload.model_dump(exclude_unset=True))
-    # update_settings seeds every key with a valid default and normalizes
-    # retrieval_channels, so the literal narrowing below cannot fail.
+    # update_settings seeds every key with a valid default and normalizes the
+    # enum-like settings, so the literal narrowing below cannot fail.
     return SystemSettingsRead(
         top_k=int(values["top_k"]),
         score_threshold=float(values["score_threshold"]),
@@ -68,6 +69,8 @@ def patch_system_settings(
         privacy_mode=cast(PrivacyMode, values["privacy_mode"]),
         glass_variant=cast(GlassVariant, values["glass_variant"]),
         retrieval_channels=cast(RetrievalChannel, values["retrieval_channels"]),
+        injection_filter_mode=cast(InjectionFilterMode, values["injection_filter_mode"]),
+        injection_downweight=float(values["injection_downweight"]),
     )
 
 

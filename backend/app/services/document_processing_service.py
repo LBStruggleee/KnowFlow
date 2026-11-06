@@ -6,6 +6,7 @@ from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.document_section import DocumentSection
 from app.services.document_parser import ParsedDocument, parse_document_structure
+from app.services.injection_guard import rules_as_text, scan_text
 from app.services.lexical_search import _build_search_text
 from app.services.text_chunker import estimate_token_count, split_text_structured
 from app.services.vector_store_service import vector_store_service
@@ -100,6 +101,7 @@ def process_document_record(db: Session, document_id: int) -> None:
         chunk_index = 0
         for result in split_text_structured(parsed.sections, root_content=parsed.lead_content):
             owner = owners.get(result.section_order, owners[-1])
+            injection = scan_text(result.content)
             document_chunk = DocumentChunk(
                 kb_id=document.kb_id,
                 document_id=document.id,
@@ -108,6 +110,8 @@ def process_document_record(db: Session, document_id: int) -> None:
                 token_count=estimate_token_count(result.content),
                 section_id=owner.id,
                 search_text=_build_search_text(result.content, owner.section_path),
+                injection_flag=injection.flagged,
+                injection_rules=rules_as_text(injection.rules),
             )
             db.add(document_chunk)
             document_chunks.append(document_chunk)
