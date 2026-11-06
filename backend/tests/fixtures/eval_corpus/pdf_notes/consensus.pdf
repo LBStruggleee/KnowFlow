@@ -1,0 +1,79 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 9 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 897 >>
+stream
+BT
+/F1 20.00 Tf 1 0 0 1 72 742.00 Tm (Chapter 4 Consensus) Tj
+/F1 10.00 Tf 1 0 0 1 72 728.00 Tm (Consensus lets replicas agree on one value even when some nodes fail or messages are delayed.) Tj
+/F1 10.00 Tf 1 0 0 1 72 714.00 Tm (Safety means no two replicas commit different values; liveness means progress while a majority is alive.) Tj
+/F1 14.00 Tf 1 0 0 1 72 694.40 Tm (4.1 Paxos) Tj
+/F1 10.00 Tf 1 0 0 1 72 680.40 Tm (Paxos runs Prepare and Accept phases before a value is chosen.) Tj
+/F1 10.00 Tf 1 0 0 1 72 666.40 Tm (A proposer first collects promises from a majority, then broadcasts the value it intends to commit.) Tj
+/F1 10.00 Tf 1 0 0 1 72 652.40 Tm (It guarantees safety only; liveness relies on randomized retries and an extra leader election layer.) Tj
+/F1 10.00 Tf 1 0 0 1 72 638.40 Tm (Paxos is famous for being hard to understand and hard to extend into a replicated log.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 9 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 951 >>
+stream
+BT
+/F1 14.00 Tf 1 0 0 1 72 750.40 Tm (4.2 Raft) Tj
+/F1 10.00 Tf 1 0 0 1 72 736.40 Tm (Raft splits the problem into leader election, log replication and safety.) Tj
+/F1 10.00 Tf 1 0 0 1 72 722.40 Tm (A leader appends log entries and replicates them to followers before committing.) Tj
+/F1 10.00 Tf 1 0 0 1 72 708.40 Tm (Randomized election timeouts and term numbers prevent split votes among candidates.) Tj
+/F1 10.00 Tf 1 0 0 1 72 694.40 Tm (A candidate that collects votes from a majority becomes leader for that term.) Tj
+/F1 10.00 Tf 1 0 0 1 72 680.40 Tm (The log matching property guarantees that two logs containing the same index and term are identical up to that point.) Tj
+/F1 10.00 Tf 1 0 0 1 72 666.40 Tm (Membership changes are applied as special log entries so the configuration is itself replicated.) Tj
+/F1 10.00 Tf 1 0 0 1 72 652.40 Tm (Snapshots compact the log and let a lagging follower catch up without replaying every entry.) Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 9 0 R >> >> /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 661 >>
+stream
+BT
+/F1 14.00 Tf 1 0 0 1 72 750.40 Tm (4.3 ZAB) Tj
+/F1 10.00 Tf 1 0 0 1 72 736.40 Tm (ZAB is the atomic broadcast protocol used by ZooKeeper.) Tj
+/F1 10.00 Tf 1 0 0 1 72 722.40 Tm (It separates recovery mode from broadcast mode and orders committed transactions.) Tj
+/F1 10.00 Tf 1 0 0 1 72 708.40 Tm (A new leader must synchronise its log with the previous leader before serving writes.) Tj
+/F1 10.00 Tf 1 0 0 1 72 694.40 Tm (ZAB guarantees that committed transactions are delivered in the same order to every replica.) Tj
+/F1 10.00 Tf 1 0 0 1 72 680.40 Tm (ZooKeeper builds locks, leader election and configuration management on top of this ordered log.) Tj
+ET
+endstream
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000001201 00000 n 
+0000001327 00000 n 
+0000002329 00000 n 
+0000002455 00000 n 
+0000003167 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+3237
+%%EOF

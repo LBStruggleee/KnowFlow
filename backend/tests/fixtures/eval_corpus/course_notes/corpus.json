@@ -1,0 +1,12 @@
+{
+  "name": "course_notes",
+  "description": "合成课程语料：分布式系统讲义 5 篇，用于检索评测基线与结构 placebo 对照。",
+  "documents": [
+    { "path": "01-基础与架构.md", "title": "分布式系统基础" },
+    { "path": "02-共识算法.md", "title": "共识算法" },
+    { "path": "03-存储与复制.md", "title": "数据复制" },
+    { "path": "04-分布式事务.md", "title": "分布式事务" },
+    { "path": "05-故障与容错.md", "title": "故障与容错" }
+  ],
+  "cases_file": "cases.jsonl"
+}

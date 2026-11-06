@@ -1,0 +1,10 @@
+{
+  "name": "pdf_notes",
+  "description": "合成 PDF 语料（3 篇英文讲义），用于 PDF 结构化前后对照。问题只用 expected_keywords 标注，保证「平铺（升级前）」与「结构感知（升级后）」两次运行的相关性口径完全一致。",
+  "documents": [
+    { "path": "replication.pdf", "title": "Data Replication" },
+    { "path": "consensus.pdf", "title": "Consensus Algorithms" },
+    { "path": "transactions.pdf", "title": "Distributed Transactions" }
+  ],
+  "cases_file": "cases.jsonl"
+}

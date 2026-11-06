@@ -1,0 +1,82 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 9 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 1195 >>
+stream
+BT
+/F1 20.00 Tf 1 0 0 1 72 742.00 Tm (Chapter 3 Data Replication) Tj
+/F1 10.00 Tf 1 0 0 1 72 728.00 Tm (Replication keeps the same data on several nodes to improve availability, lower read latency and spread read traffic.) Tj
+/F1 10.00 Tf 1 0 0 1 72 714.00 Tm (Every write has to travel to more than one machine, so consistency and write amplification become the price.) Tj
+/F1 14.00 Tf 1 0 0 1 72 694.40 Tm (3.1 Leader-Follower Replication) Tj
+/F1 10.00 Tf 1 0 0 1 72 680.40 Tm (All writes go through the leader, which streams its change log to followers as binlog or write-ahead log entries.) Tj
+/F1 10.00 Tf 1 0 0 1 72 666.40 Tm (Asynchronous replication keeps write latency low but can lose the most recent writes when the leader dies.) Tj
+/F1 10.00 Tf 1 0 0 1 72 652.40 Tm (Synchronous replication avoids data loss, yet one slow follower is enough to stall every write on the leader.) Tj
+/F1 10.00 Tf 1 0 0 1 72 638.40 Tm (Semi-synchronous replication is the common compromise: the leader waits for a single follower acknowledgement.) Tj
+/F1 10.00 Tf 1 0 0 1 72 624.40 Tm (Promoting a follower after a crash needs a consensus service to avoid two nodes believing they are the leader.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 9 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 1060 >>
+stream
+BT
+/F1 14.00 Tf 1 0 0 1 72 750.40 Tm (3.2 Multi-Leader Replication) Tj
+/F1 10.00 Tf 1 0 0 1 72 736.40 Tm (Multiple nodes accept writes, which suits multi-datacenter deployment and clients that work offline.) Tj
+/F1 10.00 Tf 1 0 0 1 72 722.40 Tm (The hard part is write conflict: the same row may be modified concurrently on two leaders.) Tj
+/F1 10.00 Tf 1 0 0 1 72 708.40 Tm (Common fixes are last-write-wins, version vectors and application level merging of conflict-free data.) Tj
+/F1 10.00 Tf 1 0 0 1 72 694.40 Tm (Last-write-wins is simple but silently discards data, so it is a poor default for financial records.) Tj
+/F1 10.00 Tf 1 0 0 1 72 680.40 Tm (Version vectors detect that two writes are concurrent instead of pretending that one of them is newer.) Tj
+/F1 10.00 Tf 1 0 0 1 72 666.40 Tm (Application level merging works when the data type has a natural merge function such as a grow-only counter.) Tj
+/F1 10.00 Tf 1 0 0 1 72 652.40 Tm (Causal ordering helps: a write that saw another write should never overwrite it without a merge decision.) Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 9 0 R >> >> /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 1066 >>
+stream
+BT
+/F1 14.00 Tf 1 0 0 1 72 750.40 Tm (3.3 Leaderless and Quorum) Tj
+/F1 10.00 Tf 1 0 0 1 72 736.40 Tm (There is no leader: clients write to several replicas and read repair fixes divergence after the fact.) Tj
+/F1 10.00 Tf 1 0 0 1 72 722.40 Tm (When the read quorum R plus the write quorum W is greater than N, the read and write sets must intersect.) Tj
+/F1 10.00 Tf 1 0 0 1 72 708.40 Tm (Dynamo style stores use this model and push conflict resolution to the client application.) Tj
+/F1 10.00 Tf 1 0 0 1 72 694.40 Tm (Anti-entropy repair scans replicas in the background and reconciles missing writes with a Merkle tree.) Tj
+/F1 10.00 Tf 1 0 0 1 72 680.40 Tm (Hinted handoff keeps availability during a temporary failure but delays convergence until the node returns.) Tj
+/F1 10.00 Tf 1 0 0 1 72 666.40 Tm (Sloppy quorums trade strict overlap for availability, so a reader may need several rounds to see the newest value.) Tj
+/F1 10.00 Tf 1 0 0 1 72 652.40 Tm (Tunable quorums let operators choose latency versus consistency for each workload independently.) Tj
+ET
+endstream
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000001500 00000 n 
+0000001626 00000 n 
+0000002738 00000 n 
+0000002864 00000 n 
+0000003982 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+4052
+%%EOF

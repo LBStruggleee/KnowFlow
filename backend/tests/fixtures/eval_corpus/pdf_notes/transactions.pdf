@@ -1,0 +1,77 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 9 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 906 >>
+stream
+BT
+/F1 20.00 Tf 1 0 0 1 72 742.00 Tm (Chapter 5 Distributed Transactions) Tj
+/F1 10.00 Tf 1 0 0 1 72 728.00 Tm (Cross service operations need atomicity rebuilt above the database boundary.) Tj
+/F1 10.00 Tf 1 0 0 1 72 714.00 Tm (Network timeouts make it impossible to distinguish a failed commit from a lost response.) Tj
+/F1 14.00 Tf 1 0 0 1 72 694.40 Tm (5.1 Two-Phase Commit) Tj
+/F1 10.00 Tf 1 0 0 1 72 680.40 Tm (A coordinator asks participants to vote, then decides commit or abort.) Tj
+/F1 10.00 Tf 1 0 0 1 72 666.40 Tm (The coordinator is a single point of failure and participants block while holding locks.) Tj
+/F1 10.00 Tf 1 0 0 1 72 652.40 Tm (A participant that voted yes cannot decide on its own: it must wait for the coordinator decision.) Tj
+/F1 10.00 Tf 1 0 0 1 72 638.40 Tm (Presumed abort and presumed commit recovery protocols reduce the blocking window at the cost of extra rules.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 9 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 689 >>
+stream
+BT
+/F1 14.00 Tf 1 0 0 1 72 750.40 Tm (5.2 TCC) Tj
+/F1 10.00 Tf 1 0 0 1 72 736.40 Tm (TCC splits work into Try, Confirm and Cancel business operations.) Tj
+/F1 10.00 Tf 1 0 0 1 72 722.40 Tm (It moves the lock from database rows to business resources and needs idempotency.) Tj
+/F1 10.00 Tf 1 0 0 1 72 708.40 Tm (Try reserves inventory or credit, Confirm consumes the reservation and Cancel releases it.) Tj
+/F1 10.00 Tf 1 0 0 1 72 694.40 Tm (Empty rollback protection matters: Cancel may arrive before Try when the network reorders requests.) Tj
+/F1 10.00 Tf 1 0 0 1 72 680.40 Tm (Suspension is required when a Cancel arrives while Try is still running, otherwise the resource leaks.) Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 9 0 R >> >> /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 675 >>
+stream
+BT
+/F1 14.00 Tf 1 0 0 1 72 750.40 Tm (5.3 Saga) Tj
+/F1 10.00 Tf 1 0 0 1 72 736.40 Tm (Saga runs local transactions and compensates them in reverse order on failure.) Tj
+/F1 10.00 Tf 1 0 0 1 72 722.40 Tm (It does not provide isolation, so intermediate states are visible to readers.) Tj
+/F1 10.00 Tf 1 0 0 1 72 708.40 Tm (Compensations must be idempotent because a retry can execute the same step twice.) Tj
+/F1 10.00 Tf 1 0 0 1 72 694.40 Tm (Orchestration keeps the workflow in one service, while choreography distributes it across events.) Tj
+/F1 10.00 Tf 1 0 0 1 72 680.40 Tm (Saga suits order fulfilment and travel booking, where intermediate states are acceptable.) Tj
+ET
+endstream
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000001210 00000 n 
+0000001336 00000 n 
+0000002076 00000 n 
+0000002202 00000 n 
+0000002928 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+2998
+%%EOF

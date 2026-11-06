@@ -1,0 +1,14 @@
+{"id": "t01", "kind": "term", "question": "What do the Prepare and Accept phases do in Paxos", "expected_keywords": ["Prepare and Accept"]}
+{"id": "t02", "kind": "term", "question": "How does Raft prevent split votes", "expected_keywords": ["Randomized election timeouts"]}
+{"id": "t03", "kind": "term", "question": "What is semi-synchronous replication", "expected_keywords": ["Semi-synchronous replication"]}
+{"id": "t04", "kind": "term", "question": "Why does a quorum read return the latest write", "expected_keywords": ["greater than N"]}
+{"id": "t05", "kind": "term", "question": "What are the TCC operations", "expected_keywords": ["Try, Confirm and Cancel"]}
+{"id": "t06", "kind": "term", "question": "Why does Saga not provide isolation", "expected_keywords": ["does not provide isolation"]}
+{"id": "s01", "kind": "structure", "question": "Leader-follower versus multi-leader replication tradeoffs", "expected_keywords": ["write conflict"]}
+{"id": "s02", "kind": "structure", "question": "Which protocol does ZooKeeper use for atomic broadcast", "expected_keywords": ["ZooKeeper"]}
+{"id": "s03", "kind": "structure", "question": "Why do participants block in two-phase commit", "expected_keywords": ["participants block"]}
+{"id": "s04", "kind": "structure", "question": "How does anti-entropy repair work", "expected_keywords": ["Anti-entropy repair"]}
+{"id": "p01", "kind": "paraphrase", "question": "How do leaderless replicas converge without a leader", "expected_keywords": ["read repair"], "variants": ["Explain read repair in leaderless replication", "What does quorum intersection mean"]}
+{"id": "p02", "kind": "paraphrase", "question": "How does Raft elect a leader", "expected_keywords": ["election timeouts"], "variants": ["Describe Raft leader election", "Why do term numbers prevent split votes"]}
+{"id": "u01", "kind": "unanswerable", "question": "How does Kafka achieve exactly-once semantics"}
+{"id": "u02", "kind": "unanswerable", "question": "What is the time complexity of transformer attention"}

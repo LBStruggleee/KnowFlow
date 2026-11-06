@@ -1,6 +1,7 @@
 import re
 from typing import Any
 
+from app.services.embedding_service import embedding_status
 from app.services.hybrid_search import RRF_SEMANTICS, search_hybrid, threshold_score
 from app.services.llm_service import llm_service
 from fastapi import HTTPException
@@ -48,6 +49,10 @@ class RagService:
         score_semantics = hybrid.trace.get("score_semantics", RRF_SEMANTICS)
         retrieval_trace = _build_retrieval_trace(sources, top_k, score_threshold, score_semantics)
         retrieval_trace["channels"] = hybrid.trace
+        # Which embedding backend served this answer: a hashing fallback makes
+        # the "vector" channel bag-of-words, so the trace must not imply
+        # semantic retrieval when it is not.
+        retrieval_trace["embedding"] = embedding_status()
         if not sources:
             return _no_evidence_result([], retrieval_trace)
 
