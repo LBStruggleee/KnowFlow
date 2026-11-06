@@ -106,7 +106,12 @@ def ensure_lexical_index(engine: Engine) -> bool:
 
 
 def ensure_chunk_columns(engine: Engine) -> None:
-    expected = {"section_id": "INTEGER", "search_text": "TEXT DEFAULT ''"}
+    expected = {
+        "section_id": "INTEGER",
+        "search_text": "TEXT DEFAULT ''",
+        "injection_flag": "BOOLEAN DEFAULT 0",
+        "injection_rules": "TEXT DEFAULT ''",
+    }
     with engine.begin() as connection:
         existing = {
             row[1]

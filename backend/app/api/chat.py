@@ -57,6 +57,8 @@ def chat(
             privacy_mode=config["privacy_mode"],
             db=db,
             channels=config["retrieval_channels"],
+            injection_mode=config["injection_filter_mode"],
+            injection_downweight=config["injection_downweight"],
         )
     except HTTPException:
         raise

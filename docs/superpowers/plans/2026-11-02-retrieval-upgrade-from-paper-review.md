@@ -1,6 +1,6 @@
 # KnowFlow 检索升级工作流（承接 2026-11 三篇 RAG 论文判断报告）
 
-> **状态：T1 + T2 已执行完成（2026-11-02），T3 留待下一轮**。本文件定义"怎么做、按什么顺序做、每步怎么验收"，执行记录见文末第 8 节。
+> **状态：T1 + T2（2026-11-02）、T3（2026-11-06）已执行完成**。本文件定义"怎么做、按什么顺序做、每步怎么验收"，执行记录见文末第 8 节。
 > 依据：`KnowFlow检索升级判断报告.md`（2026-11-02，对照 commit `bb4d559`）+ 仓库现状复核。
 > 确认后按"任务卡"逐条执行，每条任务独立 commit。
 
@@ -233,10 +233,11 @@ T4 文档收尾 + PR 交付
 
 | 检查 | 结果 |
 |---|---|
-| `ruff format --check backend` | 80 files already formatted |
+| `ruff format --check backend` | 85 files already formatted |
 | `ruff check backend` | All checks passed |
-| `mypy`（backend） | Success: no issues found in 51 source files |
-| `pytest backend/tests` | **235 passed**（构建过 `frontend/dist` 时；未构建时 234 passed + 1 skipped，CI 后端任务属于后者）。基线口径：收集 176 → 176 passed / 175 passed + 1 skipped，本轮新增 59 个用例 |
+| `mypy`（backend） | Success: no issues found in 53 source files |
+| `pytest backend/tests` | T1+T2 后 **235 passed**；T3 后 **280 passed**（构建过 `frontend/dist` 时；未构建时各少 1 条并计 1 skipped，CI 后端任务属于后者）。基线口径：收集 176 → 176 passed / 175 passed + 1 skipped |
+| 覆盖率 | 92% |
 | 前端 `npm run lint` / `npm test` / `npm run build` | 通过 / 47 passed / 构建通过（JS 473.60 kB） |
 
 ### 8.3 T2.1 门禁结论（通过）
@@ -265,7 +266,21 @@ PDF 结构化与平铺在 chunk 级召回上的差异不超过 1 条问题（±0
 安慰剂对照证明结构 token 确实生效（lexical MRR +0.142、向量通道精确 0.000）。详见基线报告附录 B，
 下一轮评测增强项（section 级指标 + 真实 PDF 语料）已列出。
 
-### 8.6 未完成项
+### 8.6 T3 执行记录（2026-11-06）
 
-- **T3（摄入侧注入筛查·规则版）**：按决策留待下一轮，任务卡见第 3 节；
-- section 级评测指标与真实 PDF 语料：已列入下一轮评测增强，不阻塞本次交付。
+| 卡 | 交付 | commit |
+|---|---|---|
+| T3.1 | `injection_guard.py`：10 条加权规则、NFKC/去零宽/空白折叠、描述性语境降权、结构性边界 | 见本次 `feat(injection)` commit |
+| T3.2 | `document_chunk.injection_flag/injection_rules`、迁移 4 补列 / 迁移 5 回填、入库打标 | 同上 |
+| T3.3 | 检索降权/排除 + `retrieval_trace.injection` + 两个设置项 | 同上 |
+| T3.4 | 12 正例 / 12 负例 / 1 条已知误报测试集 + 召回/误报断言 | 同上 |
+| T3.5 | chunk 接口字段 + 前端「疑似注入」徽标 | 同上 |
+
+**实测**（详见 `docs/摄入侧注入筛查-2026-11.md`）：合成集 12/12 拦截、12/12 负例零误报；
+真实简历 PDF 16 chunk 误报 0；仓库真实中文技术文档 497 chunk 误报 1（0.20%，且是 README 里描述规则的自身文本）。
+真实世界召回估计 50–70%，不按合成集的 100% 宣传。
+
+### 8.7 未完成项
+
+- section 级评测指标与真实 PDF 语料：已列入下一轮评测增强，不阻塞本次交付；
+- T3 第二期（小模型检测器、文档级聚合抑制误报）：见注入筛查文档第 7 节。

@@ -18,6 +18,7 @@ from app.services.document_processing_service import (
     process_document,
     reset_document_for_retry,
 )
+from app.services.injection_guard import scan_text
 from app.services.vector_store_service import vector_store_service
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
@@ -30,6 +31,10 @@ UPLOAD_DIR = BASE_DIR / "storage" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 logger = logging.getLogger(__name__)
 READ_CHUNK_SIZE = 1024 * 1024
+
+
+def _split_rules(raw: str) -> list[str]:
+    return [rule for rule in (raw or "").split(",") if rule]
 
 
 @router.post(
@@ -256,6 +261,9 @@ def list_document_chunks(
             created_at=chunk.created_at,
             section_id=chunk.section_id,
             section_path=paths.get(chunk.section_id, "") if chunk.section_id else "",
+            injection_flag=chunk.injection_flag,
+            injection_rules=_split_rules(chunk.injection_rules),
+            injection_score=scan_text(chunk.content).score if chunk.injection_flag else 0.0,
         )
         for chunk in chunks
     ]

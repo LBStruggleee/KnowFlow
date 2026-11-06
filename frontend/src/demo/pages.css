@@ -1050,6 +1050,18 @@
   font-style: normal;
 }
 
+.chunk-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(214, 69, 69, 0.12);
+  color: #b3261e;
+  font-size: 8px;
+  font-family: inherit;
+  cursor: help;
+}
+
 .chunk-loading {
   padding: 4px 9px;
   color: var(--muted);

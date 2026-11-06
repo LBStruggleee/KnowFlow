@@ -11,6 +11,8 @@ class SystemSettingsRead(BaseModel):
     privacy_mode: Literal["local", "hybrid", "cloud"]
     glass_variant: Literal["clear", "balanced", "contrast"]
     retrieval_channels: Literal["vector", "lexical", "hybrid"]
+    injection_filter_mode: Literal["off", "downweight", "exclude"]
+    injection_downweight: float
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -26,6 +28,10 @@ class SystemSettingsUpdate(BaseModel):
     # Plain str (not Literal) so unknown values reach normalization
     # instead of 422; update_settings coerces them to "hybrid".
     retrieval_channels: str | None = Field(default=None)
+    # Same normalization path for the injection policy: an unknown value is
+    # coerced to "downweight" instead of failing the whole settings form.
+    injection_filter_mode: str | None = Field(default=None)
+    injection_downweight: float | None = Field(default=None, ge=0, le=1)
 
 
 class VectorIndexCollectionRead(BaseModel):

@@ -139,4 +139,6 @@ def test_migration_registry_keeps_the_historical_startup_order() -> None:
         "ensure_chunk_columns",
         "ensure_lexical_index",
         "backfill_search_text",
+        "ensure_injection_columns",
+        "backfill_injection_flags",
     ]

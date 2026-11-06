@@ -1,12 +1,17 @@
 from typing import Any
 
+from app.models.document_chunk import DocumentChunk
 from app.services.lexical_search import search_lexical
 from app.services.vector_store_service import vector_store_service
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 RRF_K = 60
 VALID_CHANNELS = ("vector", "lexical", "hybrid")
+INJECTION_MODES = ("off", "downweight", "exclude")
+DEFAULT_INJECTION_MODE = "downweight"
+DEFAULT_INJECTION_DOWNWEIGHT = 0.5
 
 # Score semantics of the returned hits. score_threshold must be compared
 # against a normalized [0, 1] scale, and only two of the three scales carry an
@@ -64,19 +69,77 @@ def _empty_channel(skipped: Any = True) -> dict[str, Any]:
     return {"returned": 0, "best": 0.0, "skipped": skipped}
 
 
+def normalize_injection_mode(mode: str) -> str:
+    return mode if mode in INJECTION_MODES else DEFAULT_INJECTION_MODE
+
+
+def _flagged_chunk_ids(db: Session | None, chunk_ids: list[int]) -> set[int]:
+    # ``isinstance`` keeps callers that pass a sentinel (tests) or None from
+    # reaching into a session they do not really have; production always passes
+    # a real Session.
+    if db is None or not isinstance(db, Session) or not chunk_ids:
+        return set()
+    rows = db.scalars(
+        select(DocumentChunk.id).where(
+            DocumentChunk.id.in_(chunk_ids),
+            DocumentChunk.injection_flag.is_(True),
+        )
+    )
+    return {int(chunk_id) for chunk_id in rows}
+
+
+def apply_injection_policy(
+    db: Session | None,
+    hits: list[dict[str, Any]],
+    mode: str,
+    downweight: float,
+) -> tuple[list[dict[str, Any]], int]:
+    """Downweight or exclude chunks flagged by the ingestion-time screen.
+
+    Runs after fusion and before the top-k slice so an excluded hit can be
+    replaced by the next candidate instead of silently shrinking the result.
+    Returns the adjusted hits (re-sorted when downweighting) and how many
+    returned candidates were affected.
+    """
+    policy = normalize_injection_mode(mode)
+    if not hits or policy == "off":
+        return list(hits), 0
+
+    flagged = _flagged_chunk_ids(db, [int(hit["chunk_id"]) for hit in hits])
+    if not flagged:
+        return list(hits), 0
+
+    if policy == "exclude":
+        kept = [hit for hit in hits if int(hit["chunk_id"]) not in flagged]
+        return kept, len(hits) - len(kept)
+
+    adjusted = [
+        {**hit, "score": float(hit["score"]) * downweight}
+        if int(hit["chunk_id"]) in flagged
+        else hit
+        for hit in hits
+    ]
+    adjusted.sort(key=lambda hit: float(hit["score"]), reverse=True)
+    return adjusted, sum(1 for hit in hits if int(hit["chunk_id"]) in flagged)
+
+
 def search_hybrid(
     db: Session | None,
     kb_id: int,
     query: str,
     top_k: int = 5,
     channels: str = "hybrid",
+    injection_mode: str = DEFAULT_INJECTION_MODE,
+    injection_downweight: float = DEFAULT_INJECTION_DOWNWEIGHT,
 ) -> HybridResult:
     mode = normalize_channels(channels)
+    policy = normalize_injection_mode(injection_mode)
     pool = fusion_pool_size(top_k)
     vector_hits: list[dict[str, Any]] = []
     lexical_hits: list[dict[str, Any]] = []
     lexical_info: dict[str, Any] = {"returned": 0, "best": 0.0}
     trace: dict[str, Any] = {"mode": mode, "fused_by": "rrf_k60"}
+    trace["injection"] = {"mode": policy, "downweight": injection_downweight, "flagged": 0}
 
     want_lexical = mode in ("lexical", "hybrid")
     if mode in ("vector", "hybrid"):
@@ -104,10 +167,14 @@ def search_hybrid(
 
     if mode == "vector" or (mode == "hybrid" and not lexical_hits):
         trace["score_semantics"] = VECTOR_SEMANTICS
-        return HybridResult(hits=vector_hits[:top_k], trace=trace)
+        hits, flagged = apply_injection_policy(db, vector_hits, policy, injection_downweight)
+        trace["injection"]["flagged"] = flagged
+        return HybridResult(hits=hits[:top_k], trace=trace)
     if mode == "lexical" or (mode == "hybrid" and not vector_hits):
         trace["score_semantics"] = LEXICAL_SEMANTICS
-        return HybridResult(hits=lexical_hits[:top_k], trace=trace)
+        hits, flagged = apply_injection_policy(db, lexical_hits, policy, injection_downweight)
+        trace["injection"]["flagged"] = flagged
+        return HybridResult(hits=hits[:top_k], trace=trace)
 
     by_id: dict[int, dict[str, Any]] = {}
     for hit in vector_hits:
@@ -122,5 +189,7 @@ def search_hybrid(
     ordered = sorted(fused, key=lambda chunk_id: fused[chunk_id], reverse=True)
     divisor = 2.0 * (1.0 / (RRF_K + 1))
     trace["score_semantics"] = RRF_SEMANTICS
-    hits = [{**by_id[chunk_id], "score": fused[chunk_id] / divisor} for chunk_id in ordered[:top_k]]
-    return HybridResult(hits=hits, trace=trace)
+    fused_hits = [{**by_id[chunk_id], "score": fused[chunk_id] / divisor} for chunk_id in ordered]
+    hits, flagged = apply_injection_policy(db, fused_hits, policy, injection_downweight)
+    trace["injection"]["flagged"] = flagged
+    return HybridResult(hits=hits[:top_k], trace=trace)

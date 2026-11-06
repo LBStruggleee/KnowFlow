@@ -36,6 +36,8 @@ def search_knowledge_base(
         query=payload.query,
         top_k=payload.top_k,
         channels=config["retrieval_channels"],
+        injection_mode=config["injection_filter_mode"],
+        injection_downweight=config["injection_downweight"],
     )
     return VectorSearchResponse(
         query=payload.query,
