@@ -15,6 +15,7 @@ KnowFlow 是一个本地单用户的智能知识库问答应用，覆盖文档�
 - 三通道混合检索：SQLite FTS5 词面通道（中文双字分词 + LIKE 降级）与语义向量通道经 RRF（k=60）融合；检索通道（`vector`/`lexical`/`hybrid`）可在设置中切换，全过程有 trace；拒答阈值统一走 `threshold_score`（lexical-only 结果折减 0.5），消除跨通道阈值漂移。
 - 使用 DashScope `text-embedding-v3` 进行语义 embedding；没有有效 API Key 时保留 deterministic hashing fallback，方便离线开发和测试；fallback 切换带 60 秒冷却与恢复探测，切换/恢复均记录告警日志，不再永久静默降级。
 - 提示词注入防护：参考资料块带结构化定界符，`<source>`/`<user_question>` 标签形、`[资料 N]` 引用标记与「用户问题：」头均做转义，恶意文档无法伪造引用结构。
+- 摄入侧注入筛查（规则版）：入库时扫描每个 chunk，命中「忽略以上指令」「输出系统提示词」、伪造 `</source>`/`[资料 N]`、零宽字符、HTML 注释夹带、数据外泄诱导等模式即打标并记录命中规则名；检索时按设置降权（默认 ×0.5）或排除，`retrieval_trace.injection` 报告受影响条数，chunk 预览显示「疑似注入」徽标。规则与实测精度见 `docs/摄入侧注入筛查-2026-11.md`。
 - 文档解析输出层级化 Section 模型（`document_section` 表），每个 chunk 归属一个 section 并携带 `section_path`，引用可回查到章节路径；docx 表格按原文位置插入。
 - 多轮会话会把最近历史送入 LLM，并使用历史中的最近用户问题辅助指代消解；会话与用户消息先落库再调用 LLM，上游失败返回 502 且对话轮次保留。
 - 每条回答返回引用片段、相似度分数、检索 trace 和 token 使用量；支持五种学习任务模式（question/explain/compare/summarize/exercise）与隐私模式（local/hybrid/cloud）。
@@ -23,7 +24,7 @@ KnowFlow 是一个本地单用户的智能知识库问答应用，覆盖文档�
 - 7 个列表端点统一 `limit/offset` 分页（默认 100、上限 500）；`/api/admin/export` 改为流式 JSON 导出，内存峰值受批次约束。
 - SQLite 是事实数据源，Chroma 是可重建索引；知识库级索引重建带防重入守卫与失败补偿；数据导出与确认清理齐备。
 - 数据库结构变更由 `schema_migrations` 版本化迁移管理（幂等，覆盖全新库与旧库升级）。
-- 后端 235 项 pytest（构建过 `frontend/dist` 时为 235 passed；未构建时 234 passed + 1 skipped）、前端 47 项 Vitest、Ruff、mypy、覆盖率上报、Vite build 和依赖审计已接入 GitHub Actions（main 分支 CI 全绿）。
+- 后端 280 项 pytest（构建过 `frontend/dist` 时为 280 passed；未构建时 279 passed + 1 skipped）、前端 47 项 Vitest、Ruff、mypy、覆盖率上报、Vite build 和依赖审计已接入 GitHub Actions（main 分支 CI 全绿）。
 
 远端仓库：[LBStruggleee/KnowFlow](https://github.com/LBStruggleee/KnowFlow)
 稳定版本以仓库 `main` 分支和对应 GitHub Actions 结果为准。
@@ -121,7 +122,7 @@ KnowFlow/
 │   │   ├── models/          # SQLAlchemy 数据模型（含 DocumentSection、LearningRecord、SystemSetting）
 │   │   ├── schemas/         # Pydantic 输入/输出模型
 │   │   └── services/        # parser、chunker、lexical/hybrid/vector 检索、RAG、LLM、设置、启动恢复
-│   ├── tests/               # 单元测试和 API 集成测试（26 个测试文件，235 项）
+│   ├── tests/               # 单元测试和 API 集成测试（28 个测试文件，280 项）
 │   ├── storage/             # 本地上传文件和 Chroma 数据，已被 gitignore
 │   ├── pyproject.toml       # 后端项目元数据与工具配置（pytest/mypy/coverage）
 │   ├── requirements.txt     # 运行依赖
@@ -243,7 +244,7 @@ npm run build
 npm audit --audit-level=high
 ```
 
-GitHub Actions 会在 push 和 pull request 时执行同类检查。当前验证基线为后端 235 项 pytest（构建过前端产物时为 235 passed，未构建时 234 passed + 1 skipped）、前端 47 项 Vitest 测试。
+GitHub Actions 会在 push 和 pull request 时执行同类检查。当前验证基线为后端 280 项 pytest（构建过前端产物时为 280 passed，未构建时 279 passed + 1 skipped）、前端 47 项 Vitest 测试。
 
 ## 主要 API
 
